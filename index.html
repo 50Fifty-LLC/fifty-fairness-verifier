@@ -3,144 +3,261 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FiftyFifty — Provably Fair Verifier</title>
+  <meta name="theme-color" content="#0a0a09">
+  <title>Provably Fair Verifier · FiftyFifty</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,700;1,9..144,400;1,9..144,500&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="verify.css">
 </head>
 <body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="topbar" role="banner">
+    <span class="topbar-mark">◆ FiftyFifty · Verifier</span>
+    <span class="topbar-meta">v1.0 — locked algorithm</span>
+  </div>
+
   <main>
-    <header>
-      <h1>FiftyFifty — Provably Fair Verifier</h1>
-      <p class="subtitle">
-        Re-derive any prediction-game outcome from its committed seeds.
-        This page runs entirely in your browser — it doesn't talk to FiftyFifty's
-        servers. The full algorithm is below; the source is on
-        <a href="https://github.com/50Fifty-LLC/fifty-fairness-verifier" target="_blank" rel="noopener noreferrer">GitHub</a>.
+    <header class="masthead">
+      <div class="masthead-eyebrow">
+        <span class="dot"></span>
+        Cryptographic verification · runs in your browser
+      </div>
+      <h1 class="masthead-title">
+        <span>Provably</span>
+        <em>Fair</em>
+        <span>Verifier.</span>
+      </h1>
+      <p class="masthead-deck">
+        Reproduce any settled prediction-game's outcome from its committed seeds and confirm
+        the revealed server seed matches the hash that was published before play began.
+        This page never talks to FiftyFifty's servers — paste the audit data, press verify,
+        and watch the math resolve in your own machine.
       </p>
     </header>
 
-    <section class="card">
-      <h2>1. Paste the audit data</h2>
-      <p class="hint">
-        From a settled game, open the <strong>Provably Fair</strong> panel on the
-        results screen and copy each value here. Or follow a "Verify this game →"
-        link to prefill these fields.
+    <section class="section section-inputs" aria-labelledby="inputs-heading">
+      <div class="section-rule">
+        <span class="section-num">01</span>
+        <span class="section-fill"></span>
+        <h2 class="section-label" id="inputs-heading">Inputs</h2>
+      </div>
+
+      <p class="section-intro">
+        From a settled game in the FiftyFifty app, open the <strong>Provably Fair</strong>
+        panel and copy each value here. Or follow a "Verify this game" link to prefill these
+        fields automatically.
       </p>
 
-      <form id="verify-form" autocomplete="off">
-        <label>
-          <span>Game ID</span>
-          <input id="gameId" type="text" placeholder="11111111-1111-..." />
-        </label>
+      <form id="verify-form" class="ledger" autocomplete="off" novalidate>
+        <div class="ledger-row">
+          <label for="gameId" class="ledger-label">Game&nbsp;ID</label>
+          <input id="gameId" name="gameId" type="text"
+                 placeholder="00000000-0000-0000-0000-000000000000"
+                 class="ledger-input" />
+        </div>
 
-        <label>
-          <span>Game Type</span>
-          <select id="gameType" required>
+        <div class="ledger-row">
+          <label for="gameType" class="ledger-label">Game&nbsp;Type</label>
+          <select id="gameType" name="gameType" required class="ledger-input">
             <option value="">— select —</option>
-            <option value="number_guess">Closest Number (number_guess)</option>
-            <option value="tile_reveal">Mines (tile_reveal)</option>
-            <option value="blackjack">Blackjack</option>
-            <option value="plinko">Plinko</option>
+            <option value="number_guess">Closest Number  ·  number_guess</option>
+            <option value="tile_reveal">Mines  ·  tile_reveal</option>
+            <option value="blackjack">Blackjack  ·  blackjack</option>
+            <option value="plinko">Plinko  ·  plinko</option>
           </select>
-        </label>
+        </div>
 
-        <label>
-          <span>Server Seed Hash <small>(committed at game start)</small></span>
-          <input id="hash" type="text" placeholder="64-char lowercase hex" pattern="[0-9a-f]{64}" />
-        </label>
-
-        <label>
-          <span>Server Seed <small>(revealed at settlement)</small></span>
-          <input id="seed" type="text" placeholder="64-char lowercase hex" pattern="[0-9a-f]{64}" />
-        </label>
-
-        <label>
-          <span>Creator Client Seed</span>
-          <input id="creator" type="text" placeholder="64-char lowercase hex" pattern="[0-9a-f]{64}" />
-        </label>
-
-        <label>
-          <span>Opponent Client Seed</span>
-          <input id="opponent" type="text" placeholder="64-char lowercase hex" pattern="[0-9a-f]{64}" />
-        </label>
-
-        <details id="advanced-config">
-          <summary>Game-specific config (optional — defaults match FiftyFifty's launch ruleset)</summary>
-          <label>
-            <span>Number-Guess range (min/max)</span>
-            <span class="row">
-              <input id="ng_min" type="number" value="1" min="1">
-              <input id="ng_max" type="number" value="100" min="1">
-            </span>
+        <div class="ledger-row">
+          <label for="hash" class="ledger-label">
+            Server&nbsp;Seed&nbsp;Hash
+            <span class="ledger-sublabel">committed at game start</span>
           </label>
-          <label>
-            <span>Tile-Reveal grid (rows × cols × bombs)</span>
-            <span class="row">
-              <input id="tr_rows" type="number" value="4" min="2" max="8">
-              <input id="tr_cols" type="number" value="4" min="2" max="8">
-              <input id="tr_bombs" type="number" value="1" min="1">
-            </span>
+          <input id="hash" name="hash" type="text" autocapitalize="none" autocorrect="off" spellcheck="false"
+                 placeholder="64-char lowercase hex" pattern="[0-9a-f]{64}"
+                 class="ledger-input mono" />
+        </div>
+
+        <div class="ledger-row">
+          <label for="seed" class="ledger-label">
+            Server&nbsp;Seed
+            <span class="ledger-sublabel">revealed at settlement</span>
           </label>
-          <label>
-            <span>Plinko (slots / total balls / sudden-death rounds)</span>
-            <span class="row">
-              <input id="pk_slots" type="number" value="10" min="2">
-              <input id="pk_balls" type="number" value="10" min="1">
-              <input id="pk_sudden" type="number" value="5" min="1">
-            </span>
-          </label>
+          <input id="seed" name="seed" type="text" autocapitalize="none" autocorrect="off" spellcheck="false"
+                 placeholder="64-char lowercase hex" pattern="[0-9a-f]{64}"
+                 class="ledger-input mono" />
+        </div>
+
+        <div class="ledger-row">
+          <label for="creator" class="ledger-label">Creator&nbsp;Client&nbsp;Seed</label>
+          <input id="creator" name="creator" type="text" autocapitalize="none" autocorrect="off" spellcheck="false"
+                 placeholder="64-char lowercase hex" pattern="[0-9a-f]{64}"
+                 class="ledger-input mono" />
+        </div>
+
+        <div class="ledger-row">
+          <label for="opponent" class="ledger-label">Opponent&nbsp;Client&nbsp;Seed</label>
+          <input id="opponent" name="opponent" type="text" autocapitalize="none" autocorrect="off" spellcheck="false"
+                 placeholder="64-char lowercase hex" pattern="[0-9a-f]{64}"
+                 class="ledger-input mono" />
+        </div>
+
+        <details id="advanced-config" class="config-block">
+          <summary>
+            <span class="summary-arrow" aria-hidden="true"></span>
+            Game-specific configuration
+            <span class="summary-hint">defaults match FiftyFifty's launch ruleset</span>
+          </summary>
+          <div class="config-body">
+            <div class="config-row">
+              <label class="config-label">Number-Guess range</label>
+              <div class="config-fields">
+                <label class="micro" for="ng_min">min</label>
+                <input id="ng_min" type="number" value="1" min="1" class="ledger-input mono micro-input" />
+                <label class="micro" for="ng_max">max</label>
+                <input id="ng_max" type="number" value="100" min="1" class="ledger-input mono micro-input" />
+              </div>
+            </div>
+            <div class="config-row">
+              <label class="config-label">Tile-Reveal grid</label>
+              <div class="config-fields">
+                <label class="micro" for="tr_rows">rows</label>
+                <input id="tr_rows" type="number" value="4" min="2" max="8" class="ledger-input mono micro-input" />
+                <label class="micro" for="tr_cols">cols</label>
+                <input id="tr_cols" type="number" value="4" min="2" max="8" class="ledger-input mono micro-input" />
+                <label class="micro" for="tr_bombs">bombs</label>
+                <input id="tr_bombs" type="number" value="1" min="1" class="ledger-input mono micro-input" />
+              </div>
+            </div>
+            <div class="config-row">
+              <label class="config-label">Plinko</label>
+              <div class="config-fields">
+                <label class="micro" for="pk_slots">slots</label>
+                <input id="pk_slots" type="number" value="10" min="2" class="ledger-input mono micro-input" />
+                <label class="micro" for="pk_balls">balls</label>
+                <input id="pk_balls" type="number" value="10" min="1" class="ledger-input mono micro-input" />
+                <label class="micro" for="pk_sudden">sudden</label>
+                <input id="pk_sudden" type="number" value="5" min="1" class="ledger-input mono micro-input" />
+              </div>
+            </div>
+          </div>
         </details>
 
         <div class="actions">
-          <button type="submit" id="verify-btn">Verify</button>
-          <button type="button" id="clear-btn" class="secondary">Clear</button>
+          <button type="submit" id="verify-btn" class="btn btn-primary">
+            <span class="btn-label">Verify</span>
+            <span class="btn-arrow" aria-hidden="true">→</span>
+          </button>
+          <button type="button" id="clear-btn" class="btn btn-ghost">Clear</button>
         </div>
       </form>
     </section>
 
-    <section id="result-section" class="card hidden" aria-live="polite">
-      <h2>Result</h2>
+    <section id="result-section" class="section section-result hidden" aria-labelledby="result-heading" aria-live="polite">
+      <div class="section-rule">
+        <span class="section-num">02</span>
+        <span class="section-fill"></span>
+        <h2 class="section-label" id="result-heading">Result</h2>
+      </div>
       <div id="result-banner" class="banner"></div>
-      <div id="result-detail"></div>
+      <div id="result-detail" class="result-detail"></div>
     </section>
 
-    <section class="card">
-      <h2>How this works</h2>
-      <p>
-        Every FiftyFifty prediction game commits a 32-byte server seed at creation.
-        The hash <code>SHA256(serverSeed)</code> is published immediately so the
-        server can't change the seed later. Both players also contribute a 64-char
-        hex client seed. The game outcome is derived from these inputs:
+    <section class="section section-spec" aria-labelledby="spec-heading">
+      <div class="section-rule">
+        <span class="section-num">03</span>
+        <span class="section-fill"></span>
+        <h2 class="section-label" id="spec-heading">Specification</h2>
+      </div>
+
+      <p class="prose">
+        Every FiftyFifty prediction game commits a 32-byte server seed at creation. The
+        SHA-256 of that seed is published immediately so the server can't change the seed
+        afterwards. Both players also contribute a 64-character hex client seed. The game
+        outcome is then derived deterministically from these inputs:
       </p>
-      <pre><code>HMAC_SHA256(
-  key   = serverSeed,
-  data  = `${fairnessVersion}|${gameId}|${creatorSeed}|${opponentSeed}|${purposeTag}:${counter}`
-)</code></pre>
-      <p>
-        Counter starts at 0 and increments per 32-byte block. Bytes from the
-        stream are read big-endian and turned into uniform integers via
-        mask-and-reject (no modulo bias). Purpose tags differ per game type:
+
+      <figure class="codeblock" aria-label="Algorithm pseudocode">
+        <figcaption>HMAC-SHA256 byte stream</figcaption>
+        <pre><code><span class="ln">1</span><span class="kw">HMAC_SHA256</span>(
+<span class="ln">2</span>  key   = serverSeed,
+<span class="ln">3</span>  data  = `${fairnessVersion}|${gameId}|${creatorSeed}|${opponentSeed}|${purposeTag}:${counter}`
+<span class="ln">4</span>)</code></pre>
+      </figure>
+
+      <p class="prose">
+        The counter starts at 0 and increments per 32-byte block. Bytes from the stream
+        are read big-endian and reduced to uniform integers via <em>mask-and-reject</em>
+        sampling — no modulo bias. Each game type uses a distinct purpose tag so streams
+        never collide:
       </p>
-      <ul>
+
+      <ul class="tag-list">
         <li><code>number-guess:target</code></li>
-        <li><code>tile-reveal:board:creator</code> and <code>tile-reveal:board:opponent</code></li>
+        <li><code>tile-reveal:board:creator</code><span class="tag-divider">·</span><code>tile-reveal:board:opponent</code></li>
         <li><code>blackjack:deck</code></li>
-        <li><code>plinko:balls</code>, <code>plinko:sudden</code>, <code>plinko:tiebreak</code></li>
+        <li><code>plinko:balls</code><span class="tag-divider">·</span><code>plinko:sudden</code><span class="tag-divider">·</span><code>plinko:tiebreak</code></li>
       </ul>
-      <p>
-        At settlement, the server seed is revealed — the same 32 bytes whose hash
-        was published before play. Anyone can then re-run the algorithm and
-        confirm the outcome wasn't altered after the fact.
-      </p>
-      <p class="hint">
-        Don't trust this page. Open the source via <em>View Source</em>,
-        check <code>verify.js</code>, or grab the algorithm from
-        <a href="https://github.com/50Fifty-LLC/fifty-fairness-verifier" target="_blank" rel="noopener noreferrer">GitHub</a>
-        and verify with your own tools.
+
+      <p class="prose">
+        At settlement, the server seed is revealed — the same 32 bytes whose hash was
+        published before play began. Anyone can then re-run the algorithm and confirm the
+        outcome wasn't altered after the fact.
       </p>
     </section>
 
-    <footer>
-      <small>FairnessVersion: 1 · Locked algorithm</small>
+    <section class="section section-trust" aria-labelledby="trust-heading">
+      <div class="section-rule">
+        <span class="section-num">04</span>
+        <span class="section-fill"></span>
+        <h2 class="section-label" id="trust-heading">Trust Model</h2>
+      </div>
+
+      <p class="prose">
+        Don't trust this page. The whole point is that you don't have to.
+      </p>
+
+      <ol class="trust-steps">
+        <li>
+          <span class="step-num">A</span>
+          <div>
+            <strong>Read the source.</strong> View Source on this page, or open
+            <code>verify.js</code> in the repo. Around 100 lines wrap
+            <code>crypto.subtle</code> — the rest is form handling.
+          </div>
+        </li>
+        <li>
+          <span class="step-num">B</span>
+          <div>
+            <strong>Re-implement the algorithm</strong> in your favorite language.
+            HMAC-SHA256 plus mask-and-reject sampling is small enough to write in an
+            afternoon. Run a settled game's seeds through your version.
+          </div>
+        </li>
+        <li>
+          <span class="step-num">C</span>
+          <div>
+            <strong>Compare.</strong> If your independent derivation disagrees with what
+            FiftyFifty stored for the game, that's a critical bug — please report with the
+            Game ID.
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <footer class="footer" role="contentinfo">
+      <div class="footer-left">
+        <span class="footer-label">FAIRNESS_VERSION</span>
+        <span class="footer-value">1</span>
+        <span class="footer-divider">·</span>
+        <span class="footer-meta">locked</span>
+      </div>
+      <div class="footer-right">
+        <a href="https://github.com/50Fifty-LLC/fifty-fairness-verifier" target="_blank" rel="noopener noreferrer">
+          github.com/50Fifty-LLC/fifty-fairness-verifier
+        </a>
+      </div>
     </footer>
   </main>
 
