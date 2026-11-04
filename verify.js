@@ -123,12 +123,36 @@ async function deriveNumberGuessTarget(input, config) {
   return nextIntInRange(stream, config.min, config.max);
 }
 
-async function deriveTileBoards(input, config) {
+// Mines tie-break rounds: a tied round is replayed on fresh boards with one
+// more bomb, up to TILE_REVEAL_MAX_ROUNDS rounds; a tie in the last round is
+// settled by a coin flip. Round 1 keeps the original purpose tags, round
+// N >= 2 appends `:round:N`. The flip uses its own tag, `tile-reveal:tiebreak`.
+const TILE_REVEAL_MAX_ROUNDS = 6;
+
+function tileBoardPurposeTag(role, round = 1) {
+  if (!Number.isInteger(round) || round < 1) throw new Error(`Invalid tile-reveal round: ${round}`);
+  const base = `tile-reveal:board:${role}`;
+  return round === 1 ? base : `${base}:round:${round}`;
+}
+
+// Bombs on round N: the configured count for round 1, one more per replay,
+// capped so at least two safe tiles remain (matches the backend).
+function bombCountForRound(totalTiles, baseBombs, round) {
+  return Math.max(1, Math.min(baseBombs + round - 1, totalTiles - 2));
+}
+
+async function deriveTileBoards(input, config, round = 1) {
   const seed = hexToBytes(input.serverSeed);
   return {
-    creator: await deriveBombBoard(seed, buildMessage(input, 'tile-reveal:board:creator'), config),
-    opponent: await deriveBombBoard(seed, buildMessage(input, 'tile-reveal:board:opponent'), config)
+    creator: await deriveBombBoard(seed, buildMessage(input, tileBoardPurposeTag('creator', round)), config),
+    opponent: await deriveBombBoard(seed, buildMessage(input, tileBoardPurposeTag('opponent', round)), config)
   };
+}
+
+async function deriveTileRevealTiebreak(input) {
+  const seed = hexToBytes(input.serverSeed);
+  const stream = hmacStream(seed, buildMessage(input, 'tile-reveal:tiebreak'));
+  return nextIntInRange(stream, 0, 1);
 }
 
 async function deriveBombBoard(seedBytes, message, config) {
@@ -247,9 +271,20 @@ async function runDerivation({ input, gameType }) {
     const rows = parseInt($('tr_rows').value, 10);
     const cols = parseInt($('tr_cols').value, 10);
     const bombs = parseInt($('tr_bombs').value, 10);
-    const cfg = { totalTiles: rows * cols, bombCount: bombs };
-    const boards = await deriveTileBoards(input, cfg);
-    return { kind: 'tile_reveal', cfg: { rows, cols, ...cfg }, boards };
+    const roundsPlayed = parseInt($('tr_rounds').value, 10) || 1;
+    if (roundsPlayed < 1 || roundsPlayed > TILE_REVEAL_MAX_ROUNDS) {
+      throw new Error(`Rounds must be between 1 and ${TILE_REVEAL_MAX_ROUNDS}.`);
+    }
+    const totalTiles = rows * cols;
+    const rounds = [];
+    for (let r = 1; r <= roundsPlayed; r++) {
+      const bombCount = r === 1 ? bombs : bombCountForRound(totalTiles, bombs, r);
+      const boards = await deriveTileBoards(input, { totalTiles, bombCount }, r);
+      rounds.push({ round: r, bombCount, boards });
+    }
+    // The flip only decides a game whose final round also tied.
+    const tiebreak = roundsPlayed === TILE_REVEAL_MAX_ROUNDS ? await deriveTileRevealTiebreak(input) : null;
+    return { kind: 'tile_reveal', cfg: { rows, cols, totalTiles }, rounds, tiebreak };
   }
   if (gameType === 'blackjack') {
     const deck = await deriveShuffledDeck(input);
@@ -272,12 +307,17 @@ function renderDerivation(d) {
     return `<p>Computed target in [${d.cfg.min}, ${d.cfg.max}]: <strong class="mono">${d.target}</strong></p>`;
   }
   if (d.kind === 'tile_reveal') {
-    return `
-      <p>${d.cfg.rows}×${d.cfg.cols} grid · ${d.cfg.bombCount} bomb(s) per player.</p>
+    const multi = d.rounds.length > 1;
+    const rounds = d.rounds.map(r => `
+      <p>${multi ? `<strong>Round ${r.round}</strong> · ` : ''}${d.cfg.rows}×${d.cfg.cols} grid · ${r.bombCount} bomb(s) per player.</p>
       <div class="board-pair">
-        <div><h4>Creator board</h4>${renderBoardGrid(d.boards.creator, d.cfg.rows, d.cfg.cols)}</div>
-        <div><h4>Opponent board</h4>${renderBoardGrid(d.boards.opponent, d.cfg.rows, d.cfg.cols)}</div>
-      </div>`;
+        <div><h4>Creator board</h4>${renderBoardGrid(r.boards.creator, d.cfg.rows, d.cfg.cols)}</div>
+        <div><h4>Opponent board</h4>${renderBoardGrid(r.boards.opponent, d.cfg.rows, d.cfg.cols)}</div>
+      </div>`).join('');
+    const flip = d.tiebreak === null ? '' : `
+      <p>Coin-flip tiebreak bit (only used if round ${TILE_REVEAL_MAX_ROUNDS} also tied):</p>
+      <div class="mono"><strong>${d.tiebreak}</strong> ${d.tiebreak === 0 ? '(creator wins)' : '(opponent wins)'}</div>`;
+    return rounds + flip;
   }
   if (d.kind === 'blackjack') {
     return `
@@ -358,6 +398,8 @@ function applyUrlPrefill() {
   setIf('seed', 'seed');
   setIf('creator', 'creator');
   setIf('opponent', 'opponent');
+  setIf('tr_bombs', 'bombs');
+  setIf('tr_rounds', 'rounds');
   const type = params.get('type');
   if (type) $('gameType').value = type;
 }

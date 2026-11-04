@@ -53,7 +53,10 @@ HMAC_SHA256(
   (no modulo bias).
 - Per-game purpose tags:
   - `number-guess:target`
-  - `tile-reveal:board:creator` and `tile-reveal:board:opponent`
+  - `tile-reveal:board:creator` and `tile-reveal:board:opponent` (round 1);
+    Mines tie-break round N >= 2 appends `:round:N` and has one more bomb
+    than the round before (capped at total tiles - 2); a tie in round 6 is
+    settled by `tile-reveal:tiebreak` (0 = creator wins, 1 = opponent wins)
   - `blackjack:deck`
   - `plinko:balls`, `plinko:sudden`, `plinko:tiebreak`
 - Canonical pre-shuffle deck order: ranks `2-A` × suits `h,d,c,s`, rank-major.
