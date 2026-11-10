@@ -59,6 +59,7 @@ HMAC_SHA256(
     settled by `tile-reveal:tiebreak` (0 = creator wins, 1 = opponent wins)
   - `blackjack:deck`
   - `plinko:balls`, `plinko:sudden`, `plinko:tiebreak`
+  - `baccarat:shoe` (8 decks, one Fisher-Yates pass over all 416 cards)
 - Canonical pre-shuffle deck order: ranks `2-A` × suits `h,d,c,s`, rank-major.
 
 The full implementation is in `verify.js` — single file, no minification, no
@@ -125,6 +126,91 @@ engine source for completeness but is effectively unreachable in practice.
 shuffled deck itself is unchanged — only which positions go to which player
 differs. If you're re-verifying a game from that era, apply the block-deal
 mapping; the deck the verifier shows is still authoritative.
+
+## Baccarat — shoe, deal and recorded-result check
+
+**Shoe.** `deckCount` (8; the game's `gameConfig.deck_count`, pinned to 8 by
+the engine) back-to-back copies of the canonical 52-card deck, 416 cards in
+rank-major order (`2h 2d 2c 2s 3h … As`, then again). The whole shoe is then
+shuffled with one Fisher-Yates pass, descending:
+
+```
+for i = shoe.length - 1 down to 1:
+  j = nextIntInRange(stream, 0, i)      // mask-and-reject, see above
+  swap(shoe[i], shoe[j])
+```
+
+`stream` is the HMAC stream with purpose tag `baccarat:shoe`, keyed by the
+server seed over
+`1|${gameId}|${creatorClientSeed}|${opponentClientSeed}|baccarat:shoe:${counter}`.
+Both client seeds and the game id are in every block, so the shoe is
+independent of every other game and of the blackjack deck.
+
+**Deal (Punto Banco), from the top of the shoe:** `shoe[0]` Player,
+`shoe[1]` Banker, `shoe[2]` Player, `shoe[3]` Banker. Card values: A = 1,
+2–9 face value, 10/J/Q/K = 0; a total is the sum mod 10.
+
+- A **natural** (8 or 9 on two cards) on either side: nobody draws.
+- Otherwise **Player** draws one card on 0–5 and stands on 6–7.
+- If Player stood, **Banker** draws on 0–5 and stands on 6–7.
+- If Player drew, Banker uses its two-card total and the **value** of
+  Player's third card:
+
+  | Banker | draws when Player's third card is |
+  |---|---|
+  | 0–2 | always |
+  | 3 | anything but 8 |
+  | 4 | 2–7 |
+  | 5 | 4–7 |
+  | 6 | 6–7 |
+  | 7 | never |
+
+- Third cards come off the shoe in that order: Player's (if any), then
+  Banker's. Higher total wins; equal totals are a tie.
+
+**Settlement** (both seats pick Banker or Player): a tie deal pushes both main
+bets; opposite picks → the seat whose side won takes the pot
+(`single_winner`); the same pick → `both_win_pot` if it hit, otherwise
+`house_keeps_both` (`refund_both` if the game's `same_side_rule` is `refund`).
+Games settled before 2026-08-12 used an earlier ruleset where Tie was a main
+bet and a tie deal was not a push (`tie_winner`, `both_win_tie`); a record
+with a Tie main bet is checked against that ruleset, and a record that only
+matches it is flagged with a note rather than passed.
+
+**Side bets** (gross payout = stake × (multiplier + 1), multipliers from the
+game's `gameConfig.side_bets`, defaults in brackets): `tie` totals equal (8);
+`player_pair` / `banker_pair` that hand's first two cards share a rank (11);
+`either_pair` (5); `perfect_pair` either hand's first two cards are the same
+rank and suit (25); `big` 5–6 cards dealt (0.54); `small` exactly 4 (1.5);
+`dragon_7` Banker wins with a three-card 7 (40); `panda_8` Player wins with a
+three-card 8 (25); `dragon_bonus` on a side: natural win 1:1, non-natural win
+by 9/8/7/6/5/4 pays 30/10/6/4/2/1:1, a win by 1–3 loses, a tie with a natural
+pushes.
+
+**What the verifier checks.** With just the seeds (what the in-app link fills
+in) it checks the hash and shows the shoe and the dealt hands. Paste the
+game's fairness record (the JSON from
+`GET /api/v1/prediction-games/:gameId/fairness`, or only its
+`storedOutcome.winningNumber`) into **Recorded result** — or pass it as the
+`record` URL parameter — and it also compares, field by field: the record's
+game id, type, version and seeds; Player and Banker cards in order; both
+totals; the outcome; the settlement type and winning seat; and every side
+bet's won / push / gross payout. Main-bet amounts (pot, vig, the 5% Banker
+commission) are not in the fairness record and are not checked.
+
+**Games that can't be re-derived.** A record with `fairnessVersion: null` or
+a missing seed has no commitment: the engine shuffled it with its crypto-RNG
+fallback, so there is nothing to replay. The verifier says so instead of
+reporting a mismatch. (Every Baccarat game since launch has been committed;
+this covers incomplete rows.)
+
+**Known-answer vectors.** `test-vectors/baccarat-vectors.json` lists seed sets
+with the expected first 12 cards of the shoe, the SHA-256 of the full shoe
+(cards joined with `,`), the dealt hands, totals, naturals and outcome — all
+produced by the server code. For example, the all-zero server seed with
+`1111…`/`2222…` client seeds and game id
+`11111111-1111-4111-8111-111111111111` deals Player `6d Qc` (6), Banker
+`Qd 7d` (7): Banker wins.
 
 ## Trust this tool? Don't have to
 

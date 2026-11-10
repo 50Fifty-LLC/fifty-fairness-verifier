@@ -1,0 +1,351 @@
+{
+  "schema": "fifty-fairness-verifier/baccarat-vectors/1",
+  "fairnessVersion": 1,
+  "generatedFrom": "fiftypayment origin/master: engines/fairness.ts deriveBaccaratShoe + engines/baccaratEngine.ts dealPuntoBanco",
+  "shoeSha256": "SHA-256 of the full shoe joined with \",\" (e.g. \"Kh,2c,…\"), lowercase hex",
+  "vectors": [
+    {
+      "name": "baccarat:zero_seed",
+      "description": "All-zero server seed, 1111/2222 client seeds (same seed set as the shared vectors file).",
+      "fairnessVersion": 1,
+      "gameId": "11111111-1111-4111-8111-111111111111",
+      "serverSeedHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "serverSeedHashHex": "66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925",
+      "creatorClientSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "opponentClientSeed": "2222222222222222222222222222222222222222222222222222222222222222",
+      "derivation": {
+        "type": "baccarat",
+        "purposeTag": "baccarat:shoe",
+        "config": {
+          "deckCount": 8
+        },
+        "expected": {
+          "shoePrefix": [
+            "6d",
+            "Qd",
+            "Qc",
+            "7d",
+            "8d",
+            "Qh",
+            "4c",
+            "4s",
+            "Qc",
+            "4h",
+            "Jh",
+            "4s"
+          ],
+          "shoeLength": 416,
+          "shoeSha256": "79b981b4e58ed1b7b0e0d9d8b7666d610c366676c63489c443fccaa8d3b9bfbc",
+          "playerHand": [
+            "6d",
+            "Qc"
+          ],
+          "bankerHand": [
+            "Qd",
+            "7d"
+          ],
+          "playerScore": 6,
+          "bankerScore": 7,
+          "playerNatural": false,
+          "bankerNatural": false,
+          "outcome": "banker"
+        }
+      }
+    },
+    {
+      "name": "baccarat:mixed_seeds",
+      "description": "aaaa… server seed, deadbeef/cafebabe client seeds (same seed set as the shared vectors file).",
+      "fairnessVersion": 1,
+      "gameId": "22222222-2222-4222-8222-222222222222",
+      "serverSeedHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "serverSeedHashHex": "e0e77a507412b120f6ede61f62295b1a7b2ff19d3dcc8f7253e51663470c888e",
+      "creatorClientSeed": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "opponentClientSeed": "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+      "derivation": {
+        "type": "baccarat",
+        "purposeTag": "baccarat:shoe",
+        "config": {
+          "deckCount": 8
+        },
+        "expected": {
+          "shoePrefix": [
+            "5s",
+            "6s",
+            "Ah",
+            "5d",
+            "Ts",
+            "3d",
+            "Qh",
+            "3d",
+            "7d",
+            "Js",
+            "6c",
+            "Jc"
+          ],
+          "shoeLength": 416,
+          "shoeSha256": "7cdd6a2f93422254aeacd55bfe6e2e055a4c3ce321bee117ace0566e719d4d03",
+          "playerHand": [
+            "5s",
+            "Ah"
+          ],
+          "bankerHand": [
+            "6s",
+            "5d",
+            "Ts"
+          ],
+          "playerScore": 6,
+          "bankerScore": 1,
+          "playerNatural": false,
+          "bankerNatural": false,
+          "outcome": "player"
+        }
+      }
+    },
+    {
+      "name": "baccarat:natural",
+      "description": "A natural on two cards: nobody draws.",
+      "fairnessVersion": 1,
+      "gameId": "33333333-3333-4333-8333-333333333333",
+      "serverSeedHex": "8fe5fa394450a3f71c02ffbcc3d988327e2cb94c06550841eacec09b0aedef3c",
+      "serverSeedHashHex": "0df43945916cd4f71e37f2f54837b5f9eb04bb6103785dddedd4f0be360a3d28",
+      "creatorClientSeed": "00ec6e4c2b2038eecaeb60ea98b4a50e5dfd1d1382542cad36624a1aec1fae57",
+      "opponentClientSeed": "727d95004b10723171620207a832aa57dbc6ff6a4325bcc9a4961934977690ff",
+      "derivation": {
+        "type": "baccarat",
+        "purposeTag": "baccarat:shoe",
+        "config": {
+          "deckCount": 8
+        },
+        "expected": {
+          "shoePrefix": [
+            "Kc",
+            "Ac",
+            "8h",
+            "5d",
+            "Ts",
+            "Kd",
+            "5s",
+            "Ad",
+            "4d",
+            "Ad",
+            "Td",
+            "5s"
+          ],
+          "shoeLength": 416,
+          "shoeSha256": "9eb5e7b9ed7a09361e6c134f08b864f7798c31c7f3e16bdc493c70c6506ae486",
+          "playerHand": [
+            "Kc",
+            "8h"
+          ],
+          "bankerHand": [
+            "Ac",
+            "5d"
+          ],
+          "playerScore": 8,
+          "bankerScore": 6,
+          "playerNatural": true,
+          "bankerNatural": false,
+          "outcome": "player"
+        }
+      }
+    },
+    {
+      "name": "baccarat:banker_tableau_draws",
+      "description": "Player draws; the tableau makes Banker draw on 3-6.",
+      "fairnessVersion": 1,
+      "gameId": "33333333-3333-4333-8333-333333333333",
+      "serverSeedHex": "8ab37dea7fc6b7288b42983f5c1693a7c477248da0935c6dafa8a424ea8f70f9",
+      "serverSeedHashHex": "34ea0921db0fb11f9994d2442f1e3ffb5d1fbbfe9bd299ee386637942fb4a7ab",
+      "creatorClientSeed": "366ee6214092985086d517028be463ee7e9e42a29828d2b8e4c27c4738e46bd9",
+      "opponentClientSeed": "55367e681f617f0931dd975a84ddd624456219657861b229ac5604b6918a4f24",
+      "derivation": {
+        "type": "baccarat",
+        "purposeTag": "baccarat:shoe",
+        "config": {
+          "deckCount": 8
+        },
+        "expected": {
+          "shoePrefix": [
+            "5d",
+            "3c",
+            "9d",
+            "Ts",
+            "Kc",
+            "5h",
+            "7h",
+            "9d",
+            "8h",
+            "Kd",
+            "4c",
+            "5d"
+          ],
+          "shoeLength": 416,
+          "shoeSha256": "97e84f898668fa61d2258ee209c2a255d4835152baba25a79d7c691b274bd906",
+          "playerHand": [
+            "5d",
+            "9d",
+            "Kc"
+          ],
+          "bankerHand": [
+            "3c",
+            "Ts",
+            "5h"
+          ],
+          "playerScore": 4,
+          "bankerScore": 8,
+          "playerNatural": false,
+          "bankerNatural": false,
+          "outcome": "banker"
+        }
+      }
+    },
+    {
+      "name": "baccarat:tie",
+      "description": "A tie deal (a push for both main bets; wins the Tie side bet).",
+      "fairnessVersion": 1,
+      "gameId": "33333333-3333-4333-8333-333333333333",
+      "serverSeedHex": "ac8f487c8bf4a1e7150c2f6e7ce6b634b323034dcef0ed60fcc18d5723664861",
+      "serverSeedHashHex": "d2baa2cbcae6e5a673d309c0cedfb7302eb8ed701b45f5415d344c57934abf54",
+      "creatorClientSeed": "39c4106a2b74bea96be201611e02a5e38d714ca3f629a5a938e8cca2fddaf1a9",
+      "opponentClientSeed": "e79578502cf807ffac5390cf1c99c6df3d2e7d5cb5832c649e16bd3574e4774b",
+      "derivation": {
+        "type": "baccarat",
+        "purposeTag": "baccarat:shoe",
+        "config": {
+          "deckCount": 8
+        },
+        "expected": {
+          "shoePrefix": [
+            "Qs",
+            "4s",
+            "4c",
+            "7h",
+            "2s",
+            "5h",
+            "Jh",
+            "3d",
+            "Kd",
+            "Qh",
+            "6d",
+            "Qd"
+          ],
+          "shoeLength": 416,
+          "shoeSha256": "a588b287884bff449fe1f6c38c38b7301a2511be6ce4241cd2c7b80dc7dac7ce",
+          "playerHand": [
+            "Qs",
+            "4c",
+            "2s"
+          ],
+          "bankerHand": [
+            "4s",
+            "7h",
+            "5h"
+          ],
+          "playerScore": 6,
+          "bankerScore": 6,
+          "playerNatural": false,
+          "bankerNatural": false,
+          "outcome": "tie"
+        }
+      }
+    },
+    {
+      "name": "baccarat:player_stands_banker_draws",
+      "description": "Player stands on 6-7, Banker draws on 0-5.",
+      "fairnessVersion": 1,
+      "gameId": "33333333-3333-4333-8333-333333333333",
+      "serverSeedHex": "1a8b852334325ae9ed968c3299baebb63bfbf0c6411c86bf6788e39ad77cac1b",
+      "serverSeedHashHex": "a08f67d67967daa5d08eab5c1c65e4969de64f753dfd345825ff3d3786ae1c1c",
+      "creatorClientSeed": "f7a09306ac3f6e1f925884b7715458eaa683292b9575e19802c78ce6eddb4931",
+      "opponentClientSeed": "62f89fda7e4ec116b3f8a0439f69f6691d79628f07dcc0f5dce64ba28b927e45",
+      "derivation": {
+        "type": "baccarat",
+        "purposeTag": "baccarat:shoe",
+        "config": {
+          "deckCount": 8
+        },
+        "expected": {
+          "shoePrefix": [
+            "Ac",
+            "Td",
+            "6d",
+            "Tc",
+            "6s",
+            "8c",
+            "6c",
+            "8s",
+            "Qd",
+            "Qc",
+            "Td",
+            "Qc"
+          ],
+          "shoeLength": 416,
+          "shoeSha256": "180b92e3a99e769ecee8507e9ae0be1505d1e6e0e7683c4bd9ee12efe38be185",
+          "playerHand": [
+            "Ac",
+            "6d"
+          ],
+          "bankerHand": [
+            "Td",
+            "Tc",
+            "6s"
+          ],
+          "playerScore": 7,
+          "bankerScore": 6,
+          "playerNatural": false,
+          "bankerNatural": false,
+          "outcome": "player"
+        }
+      }
+    },
+    {
+      "name": "baccarat:banker_tableau_stands",
+      "description": "Player draws; the tableau makes Banker stand on a 3-6 total.",
+      "fairnessVersion": 1,
+      "gameId": "33333333-3333-4333-8333-333333333333",
+      "serverSeedHex": "f0692c9c8e541577d8da11cbe363859af48cecd82bd9676239f9ddbfb2a15437",
+      "serverSeedHashHex": "818062ba0c144b4a3ba9cb4276b878e4ce9a50af993a3736c95d496114a8b28c",
+      "creatorClientSeed": "e75b3baaa90745d23916c73bdaf02f8a7d763decee387c80a935c95a3d204ff1",
+      "opponentClientSeed": "e3712be0a6823204aae6f07630c124ce425e104e3ae0af8e748e5012c71723fa",
+      "derivation": {
+        "type": "baccarat",
+        "purposeTag": "baccarat:shoe",
+        "config": {
+          "deckCount": 8
+        },
+        "expected": {
+          "shoePrefix": [
+            "Tc",
+            "7s",
+            "4d",
+            "8s",
+            "2h",
+            "7c",
+            "5h",
+            "2d",
+            "4c",
+            "2s",
+            "Js",
+            "6d"
+          ],
+          "shoeLength": 416,
+          "shoeSha256": "70bb34f1e3590301494a2bda0c715640a6f56a234b2c763e7a6be218faa75a35",
+          "playerHand": [
+            "Tc",
+            "4d",
+            "2h"
+          ],
+          "bankerHand": [
+            "7s",
+            "8s"
+          ],
+          "playerScore": 6,
+          "bankerScore": 5,
+          "playerNatural": false,
+          "bankerNatural": false,
+          "outcome": "player"
+        }
+      }
+    }
+  ]
+}

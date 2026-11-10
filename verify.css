@@ -713,6 +713,205 @@ select.ledger-input:focus {
   margin-top: 24px !important;
 }
 
+/* Amber: verified with a caveat, or nothing to verify (legacy / voided). */
+.banner-warn {
+  background: linear-gradient(to right, rgba(234, 182, 118, 0.08), transparent);
+  border: 1px solid rgba(234, 182, 118, 0.3);
+  color: var(--accent-warm);
+}
+.banner-warn::before {
+  background: var(--accent);
+  box-shadow: 0 0 14px var(--accent-glow);
+}
+
+.ledger-textarea {
+  resize: vertical;
+  min-height: 92px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+/* Per-field comparison rows (Baccarat recorded result vs derivation). */
+.checks-heading { margin-top: 28px !important; }
+
+.checks {
+  border-top: var(--rule);
+  margin-bottom: 8px;
+}
+
+.check {
+  display: grid;
+  grid-template-columns: 22px minmax(120px, 200px) 1fr;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: var(--rule-dashed);
+  align-items: baseline;
+  font-size: 0.8rem;
+}
+
+.check-mark { font-weight: 700; text-align: center; }
+.check-pass .check-mark { color: var(--ok); }
+.check-fail .check-mark { color: var(--fail); }
+.check-note .check-mark { color: var(--accent); }
+
+.check-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.check-fail .check-label { color: #ee9b80; }
+
+.check-values {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.check-values code {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.check-k {
+  display: inline-block;
+  min-width: 72px;
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.check-note {
+  font-family: var(--display);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Baccarat hands */
+.bc-hands {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  margin-top: 18px;
+}
+
+.bc-hand {
+  background: rgba(0, 0, 0, 0.35);
+  border: var(--rule);
+  border-radius: 3px;
+  padding: 14px 16px 16px;
+}
+
+.result-detail .bc-hand h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.bc-total {
+  font-family: var(--display);
+  font-size: 1.5rem;
+  letter-spacing: 0;
+  color: var(--accent-warm);
+  line-height: 1;
+}
+
+.bc-flag {
+  margin-left: auto;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  color: var(--ok);
+  border: 1px solid rgba(130, 195, 154, 0.35);
+  border-radius: 2px;
+  padding: 2px 6px;
+}
+
+.bc-cards {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bc-card {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 64px;
+  height: 84px;
+  background: var(--text);
+  color: #1a1410;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.bc-card-red { color: #a3341c; }
+
+.bc-card-face {
+  font-family: var(--display);
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.bc-card-code {
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  color: rgba(26, 20, 16, 0.55);
+}
+
+/* Third card: turned sideways-ish and outlined in amber, as dealt on a table. */
+.bc-card-third {
+  transform: rotate(6deg);
+  box-shadow: 0 0 0 2px var(--accent), 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.bc-outcome {
+  margin-top: 18px;
+  padding: 12px 16px;
+  font-family: var(--display);
+  font-size: 1.2rem;
+  color: var(--text);
+  border: var(--rule);
+  border-left: 2px solid var(--accent);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.bc-rules,
+.bc-sidebet-rules {
+  margin: 14px 0 0;
+  padding-left: 20px;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+
+.bc-sidebet-rules code { color: var(--accent-warm); font-size: 0.8rem; }
+
+.bc-shoe {
+  margin-top: 16px;
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
+.bc-shoe summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+.bc-shoe summary:hover { color: var(--text); }
+
+.bc-shoe .kv { padding: 8px 0; }
+
 /* =============================================================================
    PROSE & SPEC
    ============================================================================= */
@@ -978,6 +1177,18 @@ select.ledger-input:focus {
     grid-template-columns: 1fr;
     gap: 6px;
   }
+
+  .bc-hands {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .check {
+    grid-template-columns: 22px 1fr;
+    gap: 4px 10px;
+  }
+
+  .check-values { grid-column: 2; }
 
   .trust-steps li {
     grid-template-columns: 40px 1fr;
