@@ -1,0 +1,793 @@
+{
+  "description": "Known-answer vectors for Poker (1v1 Texas Hold'em), produced by the FiftyFifty backend (fairness.ts derivePokerDeck, pokerEngine.ts deal, holdem.ts evaluator). deck is the full 52-card order, top first. withBurns is the deal every hand since 2026-10-04 uses (creator deck[0],deck[2]; opponent deck[1],deck[3]; burns deck[4],deck[8],deck[10]; board deck[5..7],deck[9],deck[11]); withoutBurns is the earlier board deck[4..8]. outcome/winner are the showdown result if both players check every street.",
+  "algorithm": "HMAC_SHA256(serverSeed, `${fairnessVersion}|${gameId}|${creatorClientSeed}|${opponentClientSeed}|poker:deck:${counter}`), mask-and-reject, Fisher-Yates descending over the canonical rank-major deck (2-A x h,d,c,s).",
+  "generatedFrom": "fiftypayment origin/master 34875994de0187801d2816e5a68e7596c95d6675",
+  "vectors": [
+    {
+      "name": "poker:zero_seed",
+      "description": "All-zero server seed, 1111/2222 client seeds (same seed set as the shared vectors file).",
+      "fairnessVersion": 1,
+      "gameId": "11111111-1111-4111-8111-111111111111",
+      "serverSeedHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "serverSeedHashHex": "66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925",
+      "creatorClientSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "opponentClientSeed": "2222222222222222222222222222222222222222222222222222222222222222",
+      "derivation": {
+        "type": "poker",
+        "purposeTag": "poker:deck",
+        "expected": {
+          "deck": [
+            "6h",
+            "8c",
+            "8s",
+            "Qd",
+            "2s",
+            "9d",
+            "8d",
+            "9s",
+            "Kh",
+            "Td",
+            "Ts",
+            "5s",
+            "2d",
+            "Kd",
+            "Qh",
+            "As",
+            "3s",
+            "9c",
+            "Qs",
+            "4s",
+            "7c",
+            "Ks",
+            "Jc",
+            "Qc",
+            "4h",
+            "Ad",
+            "Ac",
+            "8h",
+            "Tc",
+            "7d",
+            "Jh",
+            "7h",
+            "5c",
+            "3d",
+            "6d",
+            "Th",
+            "Jd",
+            "3c",
+            "6s",
+            "2c",
+            "Ah",
+            "4d",
+            "Kc",
+            "2h",
+            "Js",
+            "3h",
+            "5d",
+            "5h",
+            "9h",
+            "4c",
+            "6c",
+            "7s"
+          ],
+          "burns": [
+            "2s",
+            "Kh",
+            "Ts"
+          ],
+          "withBurns": {
+            "creatorHole": [
+              "6h",
+              "8s"
+            ],
+            "opponentHole": [
+              "8c",
+              "Qd"
+            ],
+            "community": [
+              "9d",
+              "8d",
+              "9s",
+              "Td",
+              "5s"
+            ],
+            "creatorBest": {
+              "handClass": "two_pair",
+              "label": "Two Pair, Nines and Eights",
+              "rank": 2763000,
+              "cards": [
+                "9d",
+                "9s",
+                "8s",
+                "8d",
+                "Td"
+              ]
+            },
+            "opponentBest": {
+              "handClass": "two_pair",
+              "label": "Two Pair, Nines and Eights",
+              "rank": 2763450,
+              "cards": [
+                "9d",
+                "9s",
+                "8c",
+                "8d",
+                "Qd"
+              ]
+            },
+            "outcome": "win",
+            "winner": "opponent"
+          },
+          "withoutBurns": {
+            "community": [
+              "2s",
+              "9d",
+              "8d",
+              "9s",
+              "Kh"
+            ],
+            "outcome": "split",
+            "winner": null,
+            "creatorBest": "Two Pair, Nines and Eights",
+            "opponentBest": "Two Pair, Nines and Eights"
+          }
+        }
+      }
+    },
+    {
+      "name": "poker:mixed_seeds",
+      "description": "aaaa… server seed, deadbeef/cafebabe client seeds (same seed set as the shared vectors file).",
+      "fairnessVersion": 1,
+      "gameId": "22222222-2222-4222-8222-222222222222",
+      "serverSeedHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "serverSeedHashHex": "e0e77a507412b120f6ede61f62295b1a7b2ff19d3dcc8f7253e51663470c888e",
+      "creatorClientSeed": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "opponentClientSeed": "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+      "derivation": {
+        "type": "poker",
+        "purposeTag": "poker:deck",
+        "expected": {
+          "deck": [
+            "Qh",
+            "5s",
+            "9h",
+            "Td",
+            "5h",
+            "3s",
+            "7h",
+            "Ts",
+            "Kc",
+            "7d",
+            "Th",
+            "5c",
+            "8s",
+            "2c",
+            "Jh",
+            "As",
+            "3h",
+            "Qd",
+            "Jd",
+            "6s",
+            "4c",
+            "8h",
+            "8c",
+            "2h",
+            "Ah",
+            "7c",
+            "5d",
+            "Jc",
+            "8d",
+            "7s",
+            "6c",
+            "Kd",
+            "4h",
+            "Kh",
+            "4s",
+            "Ks",
+            "6d",
+            "Tc",
+            "9c",
+            "2s",
+            "Js",
+            "9s",
+            "Ac",
+            "Ad",
+            "9d",
+            "3d",
+            "Qs",
+            "2d",
+            "4d",
+            "3c",
+            "Qc",
+            "6h"
+          ],
+          "burns": [
+            "5h",
+            "Kc",
+            "Th"
+          ],
+          "withBurns": {
+            "creatorHole": [
+              "Qh",
+              "9h"
+            ],
+            "opponentHole": [
+              "5s",
+              "Td"
+            ],
+            "community": [
+              "3s",
+              "7h",
+              "Ts",
+              "7d",
+              "5c"
+            ],
+            "creatorBest": {
+              "handClass": "pair",
+              "label": "Pair of Sevens",
+              "rank": 1916010,
+              "cards": [
+                "7h",
+                "7d",
+                "Qh",
+                "Ts",
+                "9h"
+              ]
+            },
+            "opponentBest": {
+              "handClass": "two_pair",
+              "label": "Two Pair, Tens and Sevens",
+              "rank": 2809125,
+              "cards": [
+                "Td",
+                "Ts",
+                "7h",
+                "7d",
+                "5s"
+              ]
+            },
+            "outcome": "win",
+            "winner": "opponent"
+          },
+          "withoutBurns": {
+            "community": [
+              "5h",
+              "3s",
+              "7h",
+              "Ts",
+              "Kc"
+            ],
+            "outcome": "win",
+            "winner": "opponent",
+            "creatorBest": "High Card, King",
+            "opponentBest": "Two Pair, Tens and Fives"
+          }
+        }
+      }
+    },
+    {
+      "name": "poker:creator",
+      "description": "Showdown won by the creator (with burns). Seed = sha256(\"poker-vector-0\").",
+      "fairnessVersion": 1,
+      "gameId": "33333333-3333-4333-8333-000000000000",
+      "serverSeedHex": "261ed7a493482b9223a2ba6b7c374bb68869beb9dd4df6ab2fb328a7eecb07b5",
+      "serverSeedHashHex": "89cf7f31a65b5ca75fc9c69d4c8cbd503a6833d34f8ea508e4cadf5be475453c",
+      "creatorClientSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+      "opponentClientSeed": "4444444444444444444444444444444444444444444444444444444444444444",
+      "derivation": {
+        "type": "poker",
+        "purposeTag": "poker:deck",
+        "expected": {
+          "deck": [
+            "4h",
+            "7h",
+            "Kd",
+            "Qs",
+            "7d",
+            "6c",
+            "8s",
+            "Ah",
+            "7c",
+            "Ks",
+            "8h",
+            "Js",
+            "6s",
+            "Td",
+            "Th",
+            "6d",
+            "5d",
+            "3h",
+            "Ac",
+            "Qh",
+            "Kc",
+            "3d",
+            "8c",
+            "Kh",
+            "5s",
+            "Jh",
+            "Jd",
+            "4c",
+            "6h",
+            "3c",
+            "2s",
+            "Qd",
+            "9s",
+            "9c",
+            "Ad",
+            "2h",
+            "Ts",
+            "Jc",
+            "9h",
+            "4d",
+            "As",
+            "Tc",
+            "7s",
+            "5c",
+            "2c",
+            "Qc",
+            "9d",
+            "3s",
+            "4s",
+            "8d",
+            "2d",
+            "5h"
+          ],
+          "burns": [
+            "7d",
+            "7c",
+            "8h"
+          ],
+          "withBurns": {
+            "creatorHole": [
+              "4h",
+              "Kd"
+            ],
+            "opponentHole": [
+              "7h",
+              "Qs"
+            ],
+            "community": [
+              "6c",
+              "8s",
+              "Ah",
+              "Ks",
+              "Js"
+            ],
+            "creatorBest": {
+              "handClass": "pair",
+              "label": "Pair of Kings",
+              "rank": 2226720,
+              "cards": [
+                "Kd",
+                "Ks",
+                "Ah",
+                "Js",
+                "8s"
+              ]
+            },
+            "opponentBest": {
+              "handClass": "high_card",
+              "label": "High Card, Ace",
+              "rank": 1514873,
+              "cards": [
+                "Ah",
+                "Ks",
+                "Qs",
+                "Js",
+                "8s"
+              ]
+            },
+            "outcome": "win",
+            "winner": "creator"
+          },
+          "withoutBurns": {
+            "community": [
+              "7d",
+              "6c",
+              "8s",
+              "Ah",
+              "7c"
+            ],
+            "outcome": "win",
+            "winner": "opponent",
+            "creatorBest": "Pair of Sevens",
+            "opponentBest": "Three of a Kind, Sevens"
+          }
+        }
+      }
+    },
+    {
+      "name": "poker:opponent",
+      "description": "Showdown won by the opponent (with burns). Seed = sha256(\"poker-vector-1\").",
+      "fairnessVersion": 1,
+      "gameId": "33333333-3333-4333-8333-000000000001",
+      "serverSeedHex": "688105255b1de418d3be1886e863a266decb1d3da9c7d3a307822e3c835ac6fb",
+      "serverSeedHashHex": "3600cb991db55ed943adaaac7569d636a2794927900567ce7bf1f36de84e4e2f",
+      "creatorClientSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+      "opponentClientSeed": "4444444444444444444444444444444444444444444444444444444444444444",
+      "derivation": {
+        "type": "poker",
+        "purposeTag": "poker:deck",
+        "expected": {
+          "deck": [
+            "Kh",
+            "Ah",
+            "2h",
+            "7c",
+            "3d",
+            "Ks",
+            "Ad",
+            "5h",
+            "8c",
+            "6s",
+            "3c",
+            "3s",
+            "9d",
+            "5c",
+            "Th",
+            "6d",
+            "9c",
+            "4h",
+            "Jc",
+            "7s",
+            "6h",
+            "Tc",
+            "4s",
+            "Ac",
+            "Kd",
+            "8h",
+            "6c",
+            "3h",
+            "9h",
+            "Td",
+            "Jd",
+            "8s",
+            "Qd",
+            "Js",
+            "2c",
+            "7d",
+            "Qh",
+            "Ts",
+            "Jh",
+            "2s",
+            "Kc",
+            "4c",
+            "Qs",
+            "7h",
+            "Qc",
+            "8d",
+            "5d",
+            "5s",
+            "2d",
+            "9s",
+            "As",
+            "4d"
+          ],
+          "burns": [
+            "3d",
+            "8c",
+            "3c"
+          ],
+          "withBurns": {
+            "creatorHole": [
+              "Kh",
+              "2h"
+            ],
+            "opponentHole": [
+              "Ah",
+              "7c"
+            ],
+            "community": [
+              "Ks",
+              "Ad",
+              "5h",
+              "6s",
+              "3s"
+            ],
+            "creatorBest": {
+              "handClass": "pair",
+              "label": "Pair of Kings",
+              "rank": 2225550,
+              "cards": [
+                "Kh",
+                "Ks",
+                "Ad",
+                "6s",
+                "5h"
+              ]
+            },
+            "opponentBest": {
+              "handClass": "pair",
+              "label": "Pair of Aces",
+              "rank": 2273040,
+              "cards": [
+                "Ah",
+                "Ad",
+                "Ks",
+                "7c",
+                "6s"
+              ]
+            },
+            "outcome": "win",
+            "winner": "opponent"
+          },
+          "withoutBurns": {
+            "community": [
+              "3d",
+              "Ks",
+              "Ad",
+              "5h",
+              "8c"
+            ],
+            "outcome": "win",
+            "winner": "opponent",
+            "creatorBest": "Pair of Kings",
+            "opponentBest": "Pair of Aces"
+          }
+        }
+      }
+    },
+    {
+      "name": "poker:split",
+      "description": "Exact tie at showdown: split pot (with burns). Seed = sha256(\"poker-vector-9\").",
+      "fairnessVersion": 1,
+      "gameId": "33333333-3333-4333-8333-000000000009",
+      "serverSeedHex": "add6ffdacd7604d2353f840206cb80da5578ebcc8f83857a3a60c47663bfb072",
+      "serverSeedHashHex": "2675a8676adf9c3f6fe430e183a8bd01210a3887ae2c8ed691603101c017170b",
+      "creatorClientSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+      "opponentClientSeed": "4444444444444444444444444444444444444444444444444444444444444444",
+      "derivation": {
+        "type": "poker",
+        "purposeTag": "poker:deck",
+        "expected": {
+          "deck": [
+            "4h",
+            "4s",
+            "7d",
+            "Td",
+            "Ks",
+            "8d",
+            "3d",
+            "5d",
+            "9s",
+            "2c",
+            "Kd",
+            "Ah",
+            "Ac",
+            "9c",
+            "7h",
+            "Qc",
+            "9d",
+            "3h",
+            "6c",
+            "7c",
+            "Ts",
+            "Qd",
+            "2s",
+            "6d",
+            "Kh",
+            "3c",
+            "5s",
+            "4c",
+            "9h",
+            "Qs",
+            "7s",
+            "6h",
+            "Ad",
+            "Jc",
+            "2h",
+            "Kc",
+            "8c",
+            "Jd",
+            "8h",
+            "6s",
+            "Jh",
+            "Th",
+            "5c",
+            "Tc",
+            "8s",
+            "Qh",
+            "2d",
+            "4d",
+            "5h",
+            "3s",
+            "As",
+            "Js"
+          ],
+          "burns": [
+            "Ks",
+            "9s",
+            "Kd"
+          ],
+          "withBurns": {
+            "creatorHole": [
+              "4h",
+              "7d"
+            ],
+            "opponentHole": [
+              "4s",
+              "Td"
+            ],
+            "community": [
+              "8d",
+              "3d",
+              "5d",
+              "2c",
+              "Ah"
+            ],
+            "creatorBest": {
+              "handClass": "straight",
+              "label": "Straight, Five high",
+              "rank": 4050000,
+              "cards": [
+                "5d",
+                "4h",
+                "3d",
+                "2c",
+                "Ah"
+              ]
+            },
+            "opponentBest": {
+              "handClass": "straight",
+              "label": "Straight, Five high",
+              "rank": 4050000,
+              "cards": [
+                "5d",
+                "4s",
+                "3d",
+                "2c",
+                "Ah"
+              ]
+            },
+            "outcome": "split",
+            "winner": null
+          },
+          "withoutBurns": {
+            "community": [
+              "Ks",
+              "8d",
+              "3d",
+              "5d",
+              "9s"
+            ],
+            "outcome": "win",
+            "winner": "opponent",
+            "creatorBest": "High Card, King",
+            "opponentBest": "High Card, King"
+          }
+        }
+      }
+    },
+    {
+      "name": "poker:straight_or_better",
+      "description": "A winning hand of straight or better (with burns). Seed = sha256(\"poker-vector-20\").",
+      "fairnessVersion": 1,
+      "gameId": "33333333-3333-4333-8333-000000000020",
+      "serverSeedHex": "f6a1f08edf10f5a032bac41029d2f8e9a941fd89f947d57c15a0d0c6b00360ca",
+      "serverSeedHashHex": "af05eeb8f6c6775ce48dd598067f5c7bcf11076d6d47b1d1da5d0377db927fa0",
+      "creatorClientSeed": "3333333333333333333333333333333333333333333333333333333333333333",
+      "opponentClientSeed": "4444444444444444444444444444444444444444444444444444444444444444",
+      "derivation": {
+        "type": "poker",
+        "purposeTag": "poker:deck",
+        "expected": {
+          "deck": [
+            "4c",
+            "Ts",
+            "Qh",
+            "4s",
+            "2s",
+            "Th",
+            "7d",
+            "7s",
+            "3c",
+            "Qs",
+            "Ah",
+            "Js",
+            "7c",
+            "9d",
+            "As",
+            "9h",
+            "8h",
+            "6c",
+            "2c",
+            "6d",
+            "4d",
+            "Kd",
+            "5d",
+            "4h",
+            "Ks",
+            "9c",
+            "5s",
+            "Jh",
+            "3h",
+            "Qc",
+            "5c",
+            "7h",
+            "6s",
+            "Ac",
+            "5h",
+            "Tc",
+            "Kh",
+            "8s",
+            "Jc",
+            "2d",
+            "Ad",
+            "3s",
+            "9s",
+            "Td",
+            "Kc",
+            "2h",
+            "6h",
+            "3d",
+            "8d",
+            "Jd",
+            "8c",
+            "Qd"
+          ],
+          "burns": [
+            "2s",
+            "3c",
+            "Ah"
+          ],
+          "withBurns": {
+            "creatorHole": [
+              "4c",
+              "Qh"
+            ],
+            "opponentHole": [
+              "Ts",
+              "4s"
+            ],
+            "community": [
+              "Th",
+              "7d",
+              "7s",
+              "Qs",
+              "Js"
+            ],
+            "creatorBest": {
+              "handClass": "two_pair",
+              "label": "Two Pair, Queens and Sevens",
+              "rank": 2911725,
+              "cards": [
+                "Qh",
+                "Qs",
+                "7d",
+                "7s",
+                "Js"
+              ]
+            },
+            "opponentBest": {
+              "handClass": "flush",
+              "label": "Flush, Queen high",
+              "rank": 5203234,
+              "cards": [
+                "Qs",
+                "Js",
+                "Ts",
+                "7s",
+                "4s"
+              ]
+            },
+            "outcome": "win",
+            "winner": "opponent"
+          },
+          "withoutBurns": {
+            "community": [
+              "2s",
+              "Th",
+              "7d",
+              "7s",
+              "3c"
+            ],
+            "outcome": "win",
+            "winner": "opponent",
+            "creatorBest": "Pair of Sevens",
+            "opponentBest": "Two Pair, Tens and Sevens"
+          }
+        }
+      }
+    }
+  ]
+}

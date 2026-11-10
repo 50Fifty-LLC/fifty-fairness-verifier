@@ -67,6 +67,7 @@
             <option value="blackjack">Blackjack  ·  blackjack</option>
             <option value="plinko">Plinko  ·  plinko</option>
             <option value="baccarat">Baccarat  ·  baccarat</option>
+            <option value="poker">Poker  ·  poker</option>
           </select>
         </div>
 
@@ -107,7 +108,7 @@
         <div class="ledger-row">
           <label for="record" class="ledger-label">
             Recorded&nbsp;Result
-            <span class="ledger-sublabel">optional · Baccarat · paste the game's fairness JSON</span>
+            <span class="ledger-sublabel">optional · Baccarat, Poker · paste the game's fairness JSON</span>
           </label>
           <textarea id="record" name="record" rows="4" autocapitalize="none" autocorrect="off" spellcheck="false"
                     placeholder='{"fairness": {"gameId": "…", "storedOutcome": {"winningNumber": "…"}}}'
@@ -159,6 +160,15 @@
               <div class="config-fields">
                 <label class="micro" for="bc_decks">decks</label>
                 <input id="bc_decks" type="number" value="8" min="1" max="8" class="ledger-input mono micro-input" />
+              </div>
+            </div>
+            <div class="config-row">
+              <label class="config-label" for="pkr_burns">Poker board</label>
+              <div class="config-fields">
+                <select id="pkr_burns" class="ledger-input mono micro-select">
+                  <option value="burn">burn before flop, turn, river (since 2026-10-04)</option>
+                  <option value="none">no burns (earlier hands)</option>
+                </select>
               </div>
             </div>
           </div>
@@ -219,6 +229,7 @@
         <li><code>blackjack:deck</code></li>
         <li><code>plinko:balls</code><span class="tag-divider">·</span><code>plinko:sudden</code><span class="tag-divider">·</span><code>plinko:tiebreak</code></li>
         <li><code>baccarat:shoe</code></li>
+        <li><code>poker:deck</code></li>
       </ul>
 
       <p class="prose">

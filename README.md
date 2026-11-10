@@ -60,6 +60,7 @@ HMAC_SHA256(
   - `blackjack:deck`
   - `plinko:balls`, `plinko:sudden`, `plinko:tiebreak`
   - `baccarat:shoe` (8 decks, one Fisher-Yates pass over all 416 cards)
+  - `poker:deck` (one 52-card deck; Hold'em deal with burns, see below)
 - Canonical pre-shuffle deck order: ranks `2-A` × suits `h,d,c,s`, rank-major.
 
 The full implementation is in `verify.js` — single file, no minification, no
@@ -211,6 +212,111 @@ produced by the server code. For example, the all-zero server seed with
 `1111…`/`2222…` client seeds and game id
 `11111111-1111-4111-8111-111111111111` deals Player `6d Qc` (6), Banker
 `Qd 7d` (7): Banker wins.
+
+## Poker — deck, deal, showdown and recorded-result check
+
+One heads-up Texas Hold'em hand per game. Both players are dealt two hole
+cards, bet each street secretly and simultaneously, may fold, and at showdown
+the best five of seven cards wins; an exact tie splits the pot.
+
+**Deck.** The canonical 52-card deck (`2h 2d 2c 2s 3h … As`, rank-major),
+shuffled with one Fisher-Yates pass, descending:
+
+```
+for i = 51 down to 1:
+  j = nextIntInRange(stream, 0, i)      // mask-and-reject, see above
+  swap(deck[i], deck[j])
+```
+
+`stream` is the HMAC stream with purpose tag `poker:deck`, keyed by the server
+seed over
+`1|${gameId}|${creatorClientSeed}|${opponentClientSeed}|poker:deck:${counter}`.
+The shuffle is the same as blackjack's but the tag is different, so a poker
+deck and a blackjack deck from the same seeds are unrelated.
+
+**Deal** (0-based deck positions):
+
+```
+deck[0] creator hole 1     deck[1] opponent hole 1
+deck[2] creator hole 2     deck[3] opponent hole 2
+deck[4]  burn
+deck[5], deck[6], deck[7]  flop
+deck[8]  burn
+deck[9]  turn
+deck[10] burn
+deck[11] river
+```
+
+Burn cards are never shown at the table. Hands dealt before 2026-10-04 (before
+the engine added burns) used the board `deck[4..8]` with no burns; the deck is
+the same, only the board positions differ. With a recorded result the verifier
+picks the mapping that matches the recorded board. A no-burn board passes when
+the record's `serverSeedRevealedAt` is before the change, and gets an amber
+note when the record doesn't show the hand settled before it. With seeds only,
+choose the mapping under *Game-specific configuration → Poker board* (default:
+burns).
+
+A hand that ends by a fold stops dealing at the street where the fold
+happened: 0 board cards (preflop), 3 (flop), 4 (turn) or 5 (river).
+
+**Showdown.** Each player's best five-card hand is chosen from their two hole
+cards plus the five board cards by trying all 21 five-card subsets. Hand
+classes, low to high: high card, pair, two pair, three of a kind, straight,
+flush, full house, four of a kind, straight flush (an ace-high straight flush
+is labelled Royal Flush). Within a class, hands compare by rank only, most
+significant first: quads then the kicker; trips then the pair (full house);
+every card high to low (flush, high card); the top card (straight, straight
+flush); trips then two kickers; the two pairs then one kicker; the pair then
+three kickers. A2345 (the wheel) is the lowest straight and the ace plays low
+in it; K-A-2-3-4 is not a straight. Suits never break a tie: equal hands split
+the pot, which includes "the board plays".
+
+**What's in a Poker record.** `storedOutcome.winningNumber` is
+`{"outcome": "win" | "split" | "fold", "contestedAmount": <number>, "community": [the board cards dealt]}`
+and `storedOutcome.winner` is the seat that took the pot (`creator`,
+`opponent`, or `null` on a split). The record doesn't include hole cards, burn
+cards, who folded (on a fold it's the seat that didn't win), or any betting
+history.
+
+**What the verifier checks.** With a recorded result (the full fairness JSON
+in **Recorded result** or the `record` URL parameter): the record's game id,
+type, version and seeds; the board street by street against the deck
+positions above; that the number of board cards fits how the hand ended
+(5 for a showdown; 0, 3, 4 or 5 for a fold); for a showdown, the re-evaluated
+result (win or split) and the winning seat; for a fold, that a seat won. If a
+record ever includes `holeCards`, `handRanks` or `foldedBy` keyed by seat,
+those are checked too. With only the `winningNumber` pasted, the winning seat
+can't be checked.
+
+**What it doesn't check.** The betting is decided by the players and the
+settlement, not by the seed: bet amounts, the pot, uncalled bets returned,
+rake and `contestedAmount` are not checked. The verifier shows the contested
+amount but doesn't verify it. Who folded and when is also a player decision.
+
+**Hands that ended by a fold.** The whole deck order is fixed by the committed
+seed, so the verifier can compute both players' hole cards and the board that
+was never dealt. Those cards were never shown in play, so with a recorded
+result the verifier shows face up only what was dealt in play (the board up
+to the fold street). Both hands, the burn cards, the undealt board and the
+full deck stay behind a closed **Show cards that were not revealed in play**
+disclosure. After a showdown, the burn cards and the rest of the deck are
+behind the same disclosure. With seeds only, the verifier doesn't know how the
+hand ended, so it shows every position (both hands, burns, the full board, and
+the result *if* the hand reached showdown). That deal is the only thing it can
+check, and the seed is public once revealed.
+
+**Games that can't be re-derived.** A record with `fairnessVersion: null` or a
+missing seed has no commitment (the engine falls back to a crypto-RNG
+shuffle), and the verifier says so instead of reporting a mismatch.
+
+**Known-answer vectors.** `test-vectors/poker-vectors.json`, produced by the
+server code (`derivePokerDeck`, the engine's deal and `holdem.ts`), lists the
+full deck, the burn cards, both hands and the board with burns, the board
+without burns, both best hands and the showdown result. For example, the
+all-zero server seed with `1111…`/`2222…` client seeds and game id
+`11111111-1111-4111-8111-111111111111` deals creator `6h 8s`, opponent
+`8c Qd`, burns `2s Kh Ts`, board `9d 8d 9s | Td | 5s`. Both make two pair,
+nines and eights, and the opponent wins on the queen kicker.
 
 ## Trust this tool? Don't have to
 

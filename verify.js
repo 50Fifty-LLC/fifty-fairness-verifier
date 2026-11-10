@@ -8,7 +8,9 @@
  *      file is the spec — three implementations, one truth. Baccarat (shoe,
  *      Punto Banco deal, settlement, side bets) mirrors the backend's
  *      fairness.ts + baccaratEngine.ts; its known-answer vectors are in
- *      test-vectors/baccarat-vectors.json.
+ *      test-vectors/baccarat-vectors.json. Poker (deck, Hold'em deal with
+ *      burns, hand evaluator) mirrors fairness.ts + pokerEngine.ts + holdem.ts;
+ *      its vectors are in test-vectors/poker-vectors.json.
  *   2. A small UI driver that reads the form, runs the derivation, and renders
  *      the result.
  *
@@ -466,7 +468,7 @@ function parseRecordedResult(text) {
   if (obj.playerHand !== undefined || obj.outcome !== undefined) {
     return { meta: null, deal: obj, winner: undefined };
   }
-  throw new Error('Recorded result is neither a fairness record nor a Baccarat winningNumber.');
+  throw new Error('Recorded result is neither a fairness record nor a game\'s winningNumber.');
 }
 
 /**
@@ -490,6 +492,19 @@ function baccaratRecordUnverifiableReason(rec) {
  * { label, status: 'pass' | 'fail' | 'note', expected, recorded, note? }.
  * Only fields the record actually carries are checked.
  */
+/** The record's own id, type, version and seeds against the form's inputs. */
+function compareRecordMeta(meta, input, gameType, add) {
+  if (meta.gameId !== undefined) add('Record game ID', meta.gameId === input.gameId, input.gameId, meta.gameId);
+  if (meta.gameType !== undefined) add('Record game type', meta.gameType === gameType, gameType, meta.gameType);
+  if (meta.fairnessVersion !== undefined) {
+    add('Algorithm version', meta.fairnessVersion === FAIRNESS_VERSION, FAIRNESS_VERSION, meta.fairnessVersion);
+  }
+  const same = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+  if (meta.serverSeed) add('Record server seed', same(meta.serverSeed, input.serverSeed), input.serverSeed, meta.serverSeed);
+  if (meta.creatorClientSeed) add('Record creator seed', same(meta.creatorClientSeed, input.creatorClientSeed), input.creatorClientSeed, meta.creatorClientSeed);
+  if (meta.opponentClientSeed) add('Record opponent seed', same(meta.opponentClientSeed, input.opponentClientSeed), input.opponentClientSeed, meta.opponentClientSeed);
+}
+
 function compareBaccaratRecord(derived, rec, input) {
   const checks = [];
   const add = (label, ok, expected, recorded, note) =>
@@ -498,17 +513,7 @@ function compareBaccaratRecord(derived, rec, input) {
   const deal = rec.deal;
   const fmt = (v) => (Array.isArray(v) ? v.join(' ') : v === null ? 'null' : v === undefined ? '—' : String(v));
 
-  if (meta) {
-    if (meta.gameId !== undefined) add('Record game ID', meta.gameId === input.gameId, input.gameId, meta.gameId);
-    if (meta.gameType !== undefined) add('Record game type', meta.gameType === 'baccarat', 'baccarat', meta.gameType);
-    if (meta.fairnessVersion !== undefined) {
-      add('Algorithm version', meta.fairnessVersion === FAIRNESS_VERSION, FAIRNESS_VERSION, meta.fairnessVersion);
-    }
-    const same = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
-    if (meta.serverSeed) add('Record server seed', same(meta.serverSeed, input.serverSeed), input.serverSeed, meta.serverSeed);
-    if (meta.creatorClientSeed) add('Record creator seed', same(meta.creatorClientSeed, input.creatorClientSeed), input.creatorClientSeed, meta.creatorClientSeed);
-    if (meta.opponentClientSeed) add('Record opponent seed', same(meta.opponentClientSeed, input.opponentClientSeed), input.opponentClientSeed, meta.opponentClientSeed);
-  }
+  if (meta) compareRecordMeta(meta, input, 'baccarat', add);
 
   if (!deal) return checks;
   const d = derived.deal;
@@ -579,6 +584,444 @@ function compareBaccaratRecord(derived, rec, input) {
     }
   }
   return checks;
+}
+
+// ---------------------------------------------------------------------------
+// POKER (1v1 Texas Hold'em, one hand per game)
+//
+// Mirrors the backend's derivePokerDeck (engines/fairness.ts), the deal in
+// engines/pokerEngine.ts (initializeGameState, burnsTakenBefore,
+// dealCommunityTo) and the hand evaluator in engines/holdem.ts. Keep these
+// line-for-line with the engine; the fidelity check compares them against the
+// server code.
+// ---------------------------------------------------------------------------
+
+// Deck: the canonical 52-card deck, one Fisher-Yates pass, descending, drawn
+// from the `poker:deck` stream. Same shuffle as blackjack, different tag, so
+// a poker deck and a blackjack deck from the same seeds are unrelated.
+async function derivePokerDeck(input) {
+  const seed = hexToBytes(input.serverSeed);
+  const stream = hmacStream(seed, buildMessage(input, 'poker:deck'));
+  const deck = createCanonicalDeck();
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = await nextIntInRange(stream, 0, i);
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+// Two hole cards each, dealt alternating before any board card.
+const POKER_HOLE_CARDS_DEALT = 4;
+const POKER_STREETS = [
+  { name: 'flop', cards: [0, 1, 2] },
+  { name: 'turn', cards: [3] },
+  { name: 'river', cards: [4] }
+];
+
+// Hands dealt from 2026-10-04 (backend 82447d1) burn one card before the flop,
+// the turn and the river; earlier hands dealt the board straight after the
+// hole cards. The engine stamps the mapping on each hand at the deal.
+const POKER_BURNS_SINCE = '2026-10-05T04:25:49Z';
+
+/** Cards burned by the time the board holds `dealt` cards (engine's burnsTakenBefore). */
+function pokerBurnsTakenBefore(dealt) {
+  if (dealt < 3) return 1; // flop
+  if (dealt === 3) return 2; // turn
+  return 3; // river
+}
+
+/** Deck index of board card k (0-4), as the engine's dealCommunityTo computes it. */
+function pokerBoardIndex(k, burnCards) {
+  const burns = burnCards ? pokerBurnsTakenBefore(k) : 0;
+  return POKER_HOLE_CARDS_DEALT + burns + k;
+}
+
+/**
+ * The whole deal from a derived deck. Creator gets deck[0] and deck[2],
+ * opponent deck[1] and deck[3]. With burns: 4 burn, 5-7 flop, 8 burn, 9 turn,
+ * 10 burn, 11 river. Without: 4-8 board.
+ */
+function dealPokerHand(deck, burnCards) {
+  if (deck.length < 12) throw new Error(`Deck too small to deal: ${deck.length} cards`);
+  const boardIndex = [0, 1, 2, 3, 4].map(k => pokerBoardIndex(k, burnCards));
+  const burns = burnCards
+    ? POKER_STREETS.map(s => {
+        const index = pokerBoardIndex(s.cards[0], true) - 1;
+        return { before: s.name, index, card: deck[index] };
+      })
+    : [];
+  return {
+    burnCards,
+    creatorHole: [deck[0], deck[2]],
+    opponentHole: [deck[1], deck[3]],
+    boardIndex,
+    board: boardIndex.map(i => deck[i]),
+    burns
+  };
+}
+
+// ---- Hand evaluator (port of engines/holdem.ts) ----
+
+const HOLDEM_RANK_VALUE = {
+  '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
+  T: 10, J: 11, Q: 12, K: 13, A: 14
+};
+const HOLDEM_SUITS = new Set(['h', 'd', 'c', 's']);
+const HOLDEM_CLASS_RANK = {
+  high_card: 1, pair: 2, two_pair: 3, three_of_a_kind: 4, straight: 5,
+  flush: 6, full_house: 7, four_of_a_kind: 8, straight_flush: 9
+};
+const HOLDEM_CLASS_NAME = {
+  high_card: 'High card', pair: 'Pair', two_pair: 'Two pair', three_of_a_kind: 'Three of a kind',
+  straight: 'Straight', flush: 'Flush', full_house: 'Full house', four_of_a_kind: 'Four of a kind',
+  straight_flush: 'Straight flush'
+};
+const HOLDEM_RANK_NAME = {
+  2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five', 6: 'Six', 7: 'Seven', 8: 'Eight',
+  9: 'Nine', 10: 'Ten', 11: 'Jack', 12: 'Queen', 13: 'King', 14: 'Ace'
+};
+const HOLDEM_RANK_NAME_PLURAL = {
+  2: 'Twos', 3: 'Threes', 4: 'Fours', 5: 'Fives', 6: 'Sixes', 7: 'Sevens',
+  8: 'Eights', 9: 'Nines', 10: 'Tens', 11: 'Jacks', 12: 'Queens', 13: 'Kings', 14: 'Aces'
+};
+// Rank values run 2..14, so base 15 gives each tiebreaker its own digit and
+// `rank` compares [classRank, t0..t4] lexicographically.
+const HOLDEM_TB_BASE = 15;
+const HOLDEM_TB_SLOTS = 5;
+
+function holdemRankValue(card) {
+  return HOLDEM_RANK_VALUE[card[0]];
+}
+
+function assertHoldemCard(card, where) {
+  if (typeof card !== 'string' || card.length !== 2
+      || HOLDEM_RANK_VALUE[card[0]] === undefined || !HOLDEM_SUITS.has(card[1])) {
+    throw new Error(`Invalid card in ${where}: ${String(card)}`);
+  }
+}
+
+function holdemPackRank(classRank, tiebreakers) {
+  let value = classRank;
+  for (let i = 0; i < HOLDEM_TB_SLOTS; i++) value = value * HOLDEM_TB_BASE + (tiebreakers[i] ?? 0);
+  return value;
+}
+
+function holdemPadTiebreakers(tiebreakers) {
+  const out = tiebreakers.slice(0, HOLDEM_TB_SLOTS);
+  while (out.length < HOLDEM_TB_SLOTS) out.push(0);
+  return out;
+}
+
+/** Top card of the highest straight among distinct values (desc), 0 if none. The wheel tops out at 5. */
+function holdemStraightHigh(distinctDesc) {
+  const values = distinctDesc.includes(14) ? [...distinctDesc, 1] : distinctDesc;
+  let run = 1;
+  for (let i = 1; i < values.length; i++) {
+    if (values[i] === values[i - 1] - 1) {
+      run++;
+      if (run >= 5) return values[i - 4];
+    } else {
+      run = 1;
+    }
+  }
+  return 0;
+}
+
+function holdemLabel(handClass, tb) {
+  const t0 = tb[0];
+  const t1 = tb[1];
+  switch (handClass) {
+    case 'straight_flush': return t0 === 14 ? 'Royal Flush' : `Straight Flush, ${HOLDEM_RANK_NAME[t0]} high`;
+    case 'four_of_a_kind': return `Four of a Kind, ${HOLDEM_RANK_NAME_PLURAL[t0]}`;
+    case 'full_house': return `Full House, ${HOLDEM_RANK_NAME_PLURAL[t0]} full of ${HOLDEM_RANK_NAME_PLURAL[t1]}`;
+    case 'flush': return `Flush, ${HOLDEM_RANK_NAME[t0]} high`;
+    case 'straight': return `Straight, ${HOLDEM_RANK_NAME[t0]} high`;
+    case 'three_of_a_kind': return `Three of a Kind, ${HOLDEM_RANK_NAME_PLURAL[t0]}`;
+    case 'two_pair': return `Two Pair, ${HOLDEM_RANK_NAME_PLURAL[t0]} and ${HOLDEM_RANK_NAME_PLURAL[t1]}`;
+    case 'pair': return `Pair of ${HOLDEM_RANK_NAME_PLURAL[t0]}`;
+    default: return `High Card, ${HOLDEM_RANK_NAME[t0]}`;
+  }
+}
+
+/** Exactly five validated cards → { handClass, tiebreakers, cards (significance order) }. */
+function holdemEvaluateFive(cards) {
+  const byRank = new Map();
+  const bySuit = new Map();
+  for (const card of cards) {
+    const value = holdemRankValue(card);
+    const suit = card[1];
+    if (byRank.has(value)) byRank.get(value).push(card); else byRank.set(value, [card]);
+    if (bySuit.has(suit)) bySuit.get(suit).push(card); else bySuit.set(suit, [card]);
+  }
+  // Count desc, then value desc: the kicker order for every paired class.
+  const groups = [...byRank.entries()]
+    .map(([value, group]) => ({ value, count: group.length, cards: group }))
+    .sort((a, b) => (b.count - a.count) || (b.value - a.value));
+  const distinctDesc = groups.map(g => g.value).sort((a, b) => b - a);
+  const isFlush = bySuit.size === 1;
+  const straightTop = holdemStraightHigh(distinctDesc);
+  const orderByRun = (top) => {
+    const wanted = top === 5 ? [5, 4, 3, 2, 14] : [top, top - 1, top - 2, top - 3, top - 4];
+    return wanted.map(value => byRank.get(value)[0]);
+  };
+
+  if (isFlush && straightTop > 0) {
+    return { handClass: 'straight_flush', tiebreakers: holdemPadTiebreakers([straightTop]), cards: orderByRun(straightTop) };
+  }
+  const ordered = groups.flatMap(g => g.cards);
+  if (groups[0]?.count === 4) {
+    return { handClass: 'four_of_a_kind', tiebreakers: holdemPadTiebreakers([groups[0].value, groups[1]?.value ?? 0]), cards: ordered };
+  }
+  if (groups[0]?.count === 3 && groups[1]?.count === 2) {
+    return { handClass: 'full_house', tiebreakers: holdemPadTiebreakers([groups[0].value, groups[1].value]), cards: ordered };
+  }
+  if (isFlush) {
+    return {
+      handClass: 'flush',
+      tiebreakers: holdemPadTiebreakers(distinctDesc),
+      cards: [...cards].sort((a, b) => holdemRankValue(b) - holdemRankValue(a))
+    };
+  }
+  if (straightTop > 0) {
+    return { handClass: 'straight', tiebreakers: holdemPadTiebreakers([straightTop]), cards: orderByRun(straightTop) };
+  }
+  if (groups[0]?.count === 3) {
+    return {
+      handClass: 'three_of_a_kind',
+      tiebreakers: holdemPadTiebreakers([groups[0].value, groups[1]?.value ?? 0, groups[2]?.value ?? 0]),
+      cards: ordered
+    };
+  }
+  if (groups[0]?.count === 2 && groups[1]?.count === 2) {
+    return {
+      handClass: 'two_pair',
+      tiebreakers: holdemPadTiebreakers([groups[0].value, groups[1].value, groups[2]?.value ?? 0]),
+      cards: ordered
+    };
+  }
+  if (groups[0]?.count === 2) {
+    return {
+      handClass: 'pair',
+      tiebreakers: holdemPadTiebreakers([groups[0].value, groups[1]?.value ?? 0, groups[2]?.value ?? 0, groups[3]?.value ?? 0]),
+      cards: ordered
+    };
+  }
+  return { handClass: 'high_card', tiebreakers: holdemPadTiebreakers(distinctDesc), cards: ordered };
+}
+
+function holdemHandResult(evaluated) {
+  const classRank = HOLDEM_CLASS_RANK[evaluated.handClass];
+  return {
+    handClass: evaluated.handClass,
+    classRank,
+    rank: holdemPackRank(classRank, evaluated.tiebreakers),
+    cards: evaluated.cards,
+    tiebreakers: evaluated.tiebreakers,
+    label: holdemLabel(evaluated.handClass, evaluated.tiebreakers)
+  };
+}
+
+// All 21 five-card subsets of seven cards, in the engine's order.
+const HOLDEM_FIVE_OF_SEVEN = (() => {
+  const combos = [];
+  for (let a = 0; a < 7; a++)
+    for (let b = a + 1; b < 7; b++)
+      for (let c = b + 1; c < 7; c++)
+        for (let d = c + 1; d < 7; d++)
+          for (let e = d + 1; e < 7; e++) combos.push([a, b, c, d, e]);
+  return combos;
+})();
+
+/** Best five of 2 hole + 5 board cards, exhaustive over all 21 subsets (first strictly best wins). */
+function evaluateHoldem(hole, community) {
+  if (!Array.isArray(hole) || hole.length !== 2) throw new Error(`evaluateHoldem requires exactly 2 hole cards, got ${hole?.length ?? 0}`);
+  if (!Array.isArray(community) || community.length !== 5) throw new Error(`evaluateHoldem requires exactly 5 community cards, got ${community?.length ?? 0}`);
+  const all = [...hole, ...community];
+  const seen = new Set();
+  for (const card of all) {
+    assertHoldemCard(card, 'showdown');
+    if (seen.has(card)) throw new Error(`Duplicate card at showdown: ${card}`);
+    seen.add(card);
+  }
+  let best = null;
+  let bestRank = -1;
+  for (const combo of HOLDEM_FIVE_OF_SEVEN) {
+    const evaluated = holdemEvaluateFive(combo.map(i => all[i]));
+    const rank = holdemPackRank(HOLDEM_CLASS_RANK[evaluated.handClass], evaluated.tiebreakers);
+    if (rank > bestRank) {
+      bestRank = rank;
+      best = evaluated;
+    }
+  }
+  return holdemHandResult(best);
+}
+
+/** 'win' | 'lose' | 'tie' from a's side. Equal rank is an exact tie (split pot); suits never break ties. */
+function compareHoldemHands(a, b) {
+  if (a.rank > b.rank) return 'win';
+  if (a.rank < b.rank) return 'lose';
+  return 'tie';
+}
+
+/** Showdown of a full deal: both best hands and the result as the fairness record names it. */
+function pokerShowdown(deal) {
+  const creator = evaluateHoldem(deal.creatorHole, deal.board);
+  const opponent = evaluateHoldem(deal.opponentHole, deal.board);
+  const cmp = compareHoldemHands(creator, opponent);
+  return {
+    creator,
+    opponent,
+    outcome: cmp === 'tie' ? 'split' : 'win',
+    winner: cmp === 'win' ? 'creator' : cmp === 'lose' ? 'opponent' : null
+  };
+}
+
+// ---- Poker recorded result ----
+//
+// A finished hand's storedOutcome.winningNumber is
+//   {"outcome": "win" | "split" | "fold", "contestedAmount": <number>, "community": [cards dealt]}
+// and storedOutcome.winner names the seat that took the pot ('creator' |
+// 'opponent', null on a split). Hole cards, burns and who folded are not in
+// the record. holeCards / handRanks / foldedBy are checked too if a record
+// ever carries them (keyed by seat role).
+
+/** Street the hand reached, from how many board cards were dealt. */
+function pokerStreetFor(boardCount) {
+  return boardCount === 0 ? 'preflop' : boardCount === 3 ? 'flop' : boardCount === 4 ? 'turn' : boardCount === 5 ? 'river' : null;
+}
+
+/**
+ * Which board mapping the hand was dealt under. The recorded board decides it
+ * when it has cards (the two mappings put different deck positions on the
+ * board); otherwise the seed reveal time, otherwise the form's setting.
+ * `proven` = settled before the burn change existed, so no-burn is certain.
+ */
+function pokerMappingFor(derived, rec, fallbackBurns) {
+  const community = Array.isArray(rec?.deal?.community) ? rec.deal.community : null;
+  const revealedMs = Date.parse(rec?.meta?.serverSeedRevealedAt ?? '');
+  const settledBeforeBurns = Number.isFinite(revealedMs) ? revealedMs < Date.parse(POKER_BURNS_SINCE) : null;
+  if (community && community.length > 0) {
+    const fits = (d) => community.length <= 5 && community.every((c, i) => d.board[i] === c);
+    if (fits(derived.deals.burn)) return { burnCards: true, by: 'board', settledBeforeBurns };
+    if (fits(derived.deals.none)) return { burnCards: false, by: 'board', settledBeforeBurns };
+  }
+  if (settledBeforeBurns !== null) return { burnCards: !settledBeforeBurns, by: 'date', settledBeforeBurns };
+  return { burnCards: fallbackBurns, by: 'form', settledBeforeBurns };
+}
+
+/**
+ * Compare a derived deal with a recorded Poker hand. Same check shape as
+ * Baccarat: { label, status: 'pass' | 'fail' | 'note', expected, recorded, note? }.
+ * Returns { checks, mapping, deal, showdown, ended }.
+ */
+function comparePokerRecord(derived, rec, input, fallbackBurns = true) {
+  const checks = [];
+  const add = (label, ok, expected, recorded, note) =>
+    checks.push({ label, status: ok ? 'pass' : 'fail', expected, recorded, note });
+  const fmt = (v) => (Array.isArray(v) ? (v.length ? v.join(' ') : '(none)') : v === null ? 'null' : v === undefined ? '—' : String(v));
+  const sameArr = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => x === b[i]);
+  const meta = rec.meta;
+  const wn = rec.deal;
+
+  if (meta) compareRecordMeta(meta, input, 'poker', add);
+
+  const mapping = pokerMappingFor(derived, rec, fallbackBurns);
+  const deal = mapping.burnCards ? derived.deals.burn : derived.deals.none;
+  const result = { checks, mapping, deal, showdown: null, ended: null };
+  if (!wn) return result;
+
+  const community = wn.community;
+  const boardCount = Array.isArray(community) ? community.length : -1;
+  const street = pokerStreetFor(boardCount);
+  const outcome = wn.outcome;
+
+  // The board, street by street, as far as it was dealt.
+  if (!Array.isArray(community)) {
+    add('Board cards', false, fmt(deal.board), fmt(community), 'The record has no board (community) array.');
+  } else {
+    let mappingNoted = false;
+    for (const s of POKER_STREETS) {
+      if (s.cards[0] >= boardCount) break;
+      const want = s.cards.map(k => deal.board[k]);
+      const got = s.cards.map(k => community[k]);
+      const idx = s.cards.map(k => deal.boardIndex[k]);
+      const label = `Board · ${s.name}`;
+      const where = `deck[${idx.join(', ')}]`;
+      const ok = sameArr(want, got);
+      if (ok && !mapping.burnCards && !mappingNoted) {
+        mappingNoted = true;
+        if (mapping.settledBeforeBurns === true) {
+          add(label, true, `${fmt(want)}  ·  ${where}`, fmt(got),
+            'Dealt without burn cards, the mapping every hand used before 2026-10-04; this hand settled before burns existed.');
+        } else {
+          checks.push({
+            label, status: 'note', expected: `${fmt(want)}  ·  ${where}`, recorded: fmt(got),
+            note: 'Matches the deal without burn cards used before 2026-10-04. Correct only if the hand was dealt before that change' +
+              (mapping.settledBeforeBurns === false ? ' (its seed was revealed after it).' : '; paste the full fairness record to check the date.')
+          });
+        }
+      } else {
+        add(label, ok, `${fmt(want)}  ·  ${where}`, fmt(got));
+      }
+    }
+    if (boardCount > 5 || (boardCount > 0 && street === null)) {
+      add('Board size', false, '0, 3, 4 or 5 cards', `${boardCount} cards`);
+    }
+  }
+
+  // How far the hand went, and how it ended.
+  const showdownEnd = outcome === 'win' || outcome === 'split';
+  if (showdownEnd) {
+    result.ended = 'showdown';
+    add('Streets dealt', boardCount === 5, 'all five board cards (showdown)', `${Math.max(boardCount, 0)} board card(s)`);
+    if (boardCount === 5 || !Array.isArray(community)) {
+      const sd = pokerShowdown(deal);
+      result.showdown = sd;
+      const shown = (o, w) => (o === 'split' ? 'split pot' : `${w ?? '—'} wins`);
+      add('Showdown result', outcome === sd.outcome, sd.outcome, fmt(outcome));
+      if (rec.winner !== undefined) {
+        add('Winning seat', rec.winner === sd.winner, shown(sd.outcome, sd.winner), shown(rec.winner === null ? 'split' : 'win', rec.winner));
+      }
+    }
+  } else if (outcome === 'fold') {
+    result.ended = 'fold';
+    add('Streets dealt', street !== null, 'board stops at a street: 0, 3, 4 or 5 cards', `${Math.max(boardCount, 0)} board card(s)`);
+    if (rec.winner !== undefined) {
+      add('Winning seat', rec.winner === 'creator' || rec.winner === 'opponent', 'the seat that did not fold', fmt(rec.winner),
+        'Who folds is a player decision, not something the seed decides.');
+    }
+    if (wn.foldedBy !== undefined && rec.winner !== undefined) {
+      add('Folded by', wn.foldedBy !== rec.winner && (wn.foldedBy === 'creator' || wn.foldedBy === 'opponent'),
+        rec.winner === 'creator' ? 'opponent' : rec.winner === 'opponent' ? 'creator' : '—', fmt(wn.foldedBy));
+    }
+  } else {
+    add('Outcome', false, 'win, split or fold', fmt(outcome));
+  }
+
+  // Fields the current record doesn't carry; checked if a record ever does.
+  const holes = wn.holeCards;
+  if (holes && typeof holes === 'object') {
+    for (const seat of ['creator', 'opponent']) {
+      if (holes[seat] === undefined) continue;
+      const want = seat === 'creator' ? deal.creatorHole : deal.opponentHole;
+      add(`${seat === 'creator' ? 'Creator' : 'Opponent'} hole cards`, sameArr(want, holes[seat]), fmt(want), fmt(holes[seat]));
+    }
+  }
+  const ranks = wn.handRanks;
+  if (ranks && typeof ranks === 'object' && result.showdown) {
+    for (const seat of ['creator', 'opponent']) {
+      const r = ranks[seat];
+      if (!r || typeof r !== 'object') continue;
+      const want = result.showdown[seat];
+      const ok = (r.handClass === undefined || r.handClass === want.handClass)
+        && (r.label === undefined || r.label === want.label)
+        && (r.rank === undefined || r.rank === want.rank)
+        && (r.cards === undefined || sameArr(r.cards, want.cards));
+      add(`${seat === 'creator' ? 'Creator' : 'Opponent'} best hand`, ok, `${want.label} · ${want.cards.join(' ')}`,
+        `${r.label ?? r.handClass ?? '—'}${Array.isArray(r.cards) ? ` · ${r.cards.join(' ')}` : ''}`);
+    }
+  }
+  return result;
 }
 
 async function derivePlinkoBallResults(input, config) {
@@ -694,6 +1137,15 @@ async function runDerivation({ input, gameType }) {
     const deckCount = parseInt($('bc_decks').value, 10);
     const shoe = await deriveBaccaratShoe(input, deckCount);
     return { kind: 'baccarat', deckCount, shoe, deal: dealPuntoBanco(shoe) };
+  }
+  if (gameType === 'poker') {
+    const deck = await derivePokerDeck(input);
+    return {
+      kind: 'poker',
+      deck,
+      deals: { burn: dealPokerHand(deck, true), none: dealPokerHand(deck, false) },
+      burnsDefault: $('pkr_burns').value !== 'none'
+    };
   }
   throw new Error(`Unsupported game type: ${gameType}`);
 }
@@ -878,6 +1330,195 @@ function renderBaccaratUnverifiable(reason, rec) {
   setDetail('<p>The seed is revealed once the game is completed, cancelled or expired. Come back after the game settles.</p>');
 }
 
+// ---- Poker rendering ----
+
+function pokerCardHtml(card, caption, extra = '') {
+  const rank = card[0] === 'T' ? '10' : card[0];
+  const red = card[1] === 'h' || card[1] === 'd';
+  return `<span class="bc-card pk-card${red ? ' bc-card-red' : ''}${extra ? ` ${extra}` : ''}" title="${escapeHtml(card)} · ${escapeHtml(caption)}">`
+    + `<span class="bc-card-face">${escapeHtml(rank)}${SUIT_GLYPHS[card[1]] || '?'}</span>`
+    + `<span class="bc-card-code">${escapeHtml(card)} · ${escapeHtml(caption)}</span></span>`;
+}
+
+/** A card that exists in the deck but was not shown at the table. */
+function pokerBackHtml(caption, title) {
+  return `<span class="bc-card pk-card pk-card-back" title="${escapeHtml(title)}">`
+    + '<span class="pk-back-mark" aria-hidden="true">◆</span>'
+    + `<span class="bc-card-code">${escapeHtml(caption)}</span></span>`;
+}
+
+/** A board position the hand never reached. */
+function pokerSlotHtml(caption) {
+  return `<span class="bc-card pk-card pk-card-slot" title="not dealt · ${escapeHtml(caption)}">`
+    + '<span class="pk-slot-mark">not dealt</span>'
+    + `<span class="bc-card-code">${escapeHtml(caption)}</span></span>`;
+}
+
+const POKER_STREET_TITLE = { flop: 'Flop', turn: 'Turn', river: 'River' };
+
+/**
+ * The table: each seat's hole cards (and best hand at showdown), then the
+ * board street by street with its burn. `view` decides what is face up:
+ *   holes   — show both seats' hole cards
+ *   burns   — show burn cards face up (else face down, position only)
+ *   dealt   — board cards dealt in play (0-5); later ones are "not dealt"
+ */
+function renderPokerTable(deal, view, showdown) {
+  const seat = (name, hole, idx, best) => `
+    <div class="bc-hand pk-seat">
+      <h4>${name}<span class="pk-pos">deck[${idx.join('] · deck[')}]</span></h4>
+      <div class="bc-cards">${view.holes
+        ? hole.map((c, i) => pokerCardHtml(c, `[${idx[i]}]`)).join('')
+        : idx.map(i => pokerBackHtml(`[${i}]`, `${name} hole card · deck[${i}] · not shown in play`)).join('')}</div>
+      ${best ? `<p class="pk-best"><strong>${escapeHtml(best.label)}</strong><span>${escapeHtml(HOLDEM_CLASS_NAME[best.handClass])} · best five: <code>${escapeHtml(best.cards.join(' '))}</code></span></p>` : ''}
+      ${view.holes ? '' : '<p class="pk-best"><span>Not shown in play (no showdown).</span></p>'}
+    </div>`;
+  const streets = POKER_STREETS.map(s => {
+    const burn = deal.burns.find(b => b.before === s.name);
+    const burnHtml = !burn ? ''
+      : view.burns ? pokerCardHtml(burn.card, `burn [${burn.index}]`, 'pk-card-burn')
+      : s.cards[0] < view.dealt ? pokerBackHtml(`burn [${burn.index}]`, `burn card · deck[${burn.index}] · never shown`)
+      : pokerSlotHtml(`burn [${burn.index}]`);
+    const cards = s.cards.map(k => (k < view.dealt
+      ? pokerCardHtml(deal.board[k], `[${deal.boardIndex[k]}]`)
+      : pokerSlotHtml(`[${deal.boardIndex[k]}]`))).join('');
+    return `
+      <div class="pk-street">
+        <span class="pk-street-name">${POKER_STREET_TITLE[s.name]}</span>
+        <div class="pk-street-cards">${burnHtml}${cards}</div>
+      </div>`;
+  }).join('');
+  return `
+    <div class="bc-hands pk-seats">
+      ${seat('Creator', deal.creatorHole, [0, 2], showdown?.creator)}
+      ${seat('Opponent', deal.opponentHole, [1, 3], showdown?.opponent)}
+    </div>
+    <div class="pk-board">${streets}</div>`;
+}
+
+function pokerShowdownText(sd, conditional) {
+  const lead = conditional ? 'If the hand reached showdown: ' : '';
+  if (sd.outcome === 'split') return `${lead}Split pot · both make ${sd.creator.label}`;
+  const w = sd.winner === 'creator' ? sd.creator : sd.opponent;
+  const l = sd.winner === 'creator' ? sd.opponent : sd.creator;
+  return `${lead}${sd.winner === 'creator' ? 'Creator' : 'Opponent'} wins · ${w.label} beats ${l.label}`;
+}
+
+function pokerMappingText(mapping) {
+  const how = mapping.burnCards
+    ? 'one burn before the flop, the turn and the river (every hand dealt since 2026-10-04)'
+    : 'no burn cards (hands dealt before 2026-10-04)';
+  const why = mapping.by === 'board' ? 'matched by the recorded board'
+    : mapping.by === 'date' ? 'chosen from when the seed was revealed'
+    : 'the form setting';
+  return `${how} · ${why}`;
+}
+
+function pokerDeckHtml(deck) {
+  return `<div class="deck-display mono">${deck.map((c, i) => `${i}:${escapeHtml(c)}`).join(' ')}</div>`;
+}
+
+function renderPokerResult(parsed, result, rec) {
+  const cmp = rec ? comparePokerRecord(result, rec, parsed.input, result.burnsDefault) : null;
+  const checks = cmp ? cmp.checks : [];
+  const failed = checks.filter(c => c.status === 'fail').length;
+  const noted = checks.filter(c => c.status === 'note').length;
+  const mapping = cmp ? cmp.mapping : { burnCards: result.burnsDefault, by: 'form' };
+  const deal = mapping.burnCards ? result.deals.burn : result.deals.none;
+  const ended = cmp ? cmp.ended : null;
+  const wn = rec?.deal || null;
+
+  if (failed) {
+    setBanner('fail', `✗ Mismatch · ${failed} ${failed === 1 ? 'check below disagrees' : 'checks below disagree'} with the cards dealt from the committed deck.`);
+  } else if (rec && !wn) {
+    const status = rec.meta?.status ? ` (status: ${rec.meta.status})` : '';
+    setBanner('warn', `◆ Hash matches · no hand was recorded for this game${status}. The cards below are what this deck deals.`);
+  } else if (noted) {
+    setBanner('warn', '◆ Board verified · see the note on the deal mapping below.');
+  } else if (ended === 'fold') {
+    setBanner('ok', '✓ Verified · the recorded board matches the committed deck. The hand ended by a fold.');
+  } else if (ended === 'showdown') {
+    setBanner('ok', '✓ Verified · the recorded board and showdown result match the cards dealt from the committed deck.');
+  } else {
+    setBanner('ok', '✓ Hash matches the committed value · deal derived below.');
+  }
+
+  // What is face up. Seeds only: everything (the deal is the only thing to
+  // check). With a record: only what was shown in play; the rest goes behind
+  // the disclosure below.
+  let table;
+  let unrevealed = '';
+  const fullDeck = `<p>Full deck, top first (0-based positions):</p>${pokerDeckHtml(result.deck)}`;
+  if (!rec || !wn) {
+    const sd = pokerShowdown(deal);
+    table = `
+      <p>Dealt from the top of the deck: creator, opponent, creator, opponent; then ${deal.burnCards ? 'burn, flop, burn, turn, burn, river' : 'the flop, turn and river with no burns'}. Positions are 0-based deck indices.</p>
+      ${renderPokerTable(deal, { holes: true, burns: true, dealt: 5 }, sd)}
+      <div class="bc-outcome">${escapeHtml(pokerShowdownText(sd, true))}</div>
+      <p class="hint">A hand that ended by a fold stopped earlier: only the board up to that street was dealt and neither hand was shown. This view shows every position because, with seeds only, the deal is what there is to check.</p>
+      <details class="bc-shoe"><summary>Full deck, top first (52 cards)</summary>${pokerDeckHtml(result.deck)}</details>`;
+  } else if (ended === 'fold') {
+    const dealt = Array.isArray(wn.community) ? Math.min(wn.community.length, 5) : 0;
+    const street = pokerStreetFor(dealt) || 'an unknown street';
+    const folder = rec.winner === 'creator' ? 'Opponent' : rec.winner === 'opponent' ? 'Creator' : null;
+    const who = folder ? `${folder} folded ${street === 'preflop' ? 'preflop' : `on the ${street}`} · ${folder === 'Creator' ? 'opponent' : 'creator'} takes the pot`
+      : `Hand ended by a fold ${street === 'preflop' ? 'preflop' : `on the ${street}`}`;
+    table = `
+      <p>The hand ended by a fold, so there was no showdown: neither player's hole cards were shown, and ${dealt === 5 ? 'the whole board was dealt' : dealt === 0 ? 'no board card was dealt' : `the board stopped at the ${street}`}. Only what was dealt in play is shown here.</p>
+      ${renderPokerTable(deal, { holes: false, burns: false, dealt }, null)}
+      <div class="bc-outcome">${escapeHtml(who)}</div>
+      <p class="hint">The remaining deck order — both hands, the burn cards and the board that was never dealt — is fixed by the committed seed, so it could not have been changed after the hash was published. Those cards were never shown at the table and are kept closed below.</p>`;
+    const undealt = [0, 1, 2, 3, 4].filter(k => k >= dealt);
+    unrevealed = `
+      <details class="bc-shoe pk-unrevealed">
+        <summary>Show cards that were not revealed in play</summary>
+        <p>Computed from the revealed seed. None of these were shown to either player during the hand.</p>
+        ${renderPokerTable(deal, { holes: true, burns: true, dealt: 5 }, null)}
+        <div class="kv"><span>Board never dealt</span><code class="pk-kv-text">${undealt.length ? undealt.map(k => `${deal.board[k]} [${deal.boardIndex[k]}]`).join(' · ') : 'none (the river was dealt)'}</code></div>
+        ${fullDeck}
+      </details>`;
+  } else {
+    const sd = cmp.showdown || pokerShowdown(deal);
+    table = `
+      <p>Dealt from the top of the deck: creator, opponent, creator, opponent; then ${deal.burnCards ? 'burn, flop, burn, turn, burn, river' : 'the flop, turn and river with no burns'}. Positions are 0-based deck indices. Burn cards are never shown at the table.</p>
+      ${renderPokerTable(deal, { holes: true, burns: false, dealt: 5 }, sd)}
+      <div class="bc-outcome">${escapeHtml(pokerShowdownText(sd, false))}</div>`;
+    unrevealed = `
+      <details class="bc-shoe pk-unrevealed">
+        <summary>Show cards that were not revealed in play</summary>
+        <p>Computed from the revealed seed: the burn cards and the rest of the deck.</p>
+        <div class="kv"><span>Burn cards</span><code class="pk-kv-text">${deal.burns.length ? deal.burns.map(b => `${b.card} [${b.index}] before the ${b.before}`).join(' · ') : 'none (dealt before burns existed)'}</code></div>
+        ${fullDeck}
+      </details>`;
+  }
+
+  const contested = wn && wn.contestedAmount !== undefined
+    ? `<div class="kv"><span>Contested amount</span><code class="pk-kv-text">${escapeHtml(String(wn.contestedAmount))} per player · recorded, not checked</code></div>` : '';
+  setDetail(`
+    <div class="kv"><span>Hash check</span><code>SHA256(serverSeed) === storedHash ✓</code></div>
+    <div class="kv"><span>Algorithm</span><code>v${FAIRNESS_VERSION} · poker:deck</code></div>
+    <div class="kv"><span>Board mapping</span><code class="pk-kv-text">${escapeHtml(pokerMappingText(mapping))}</code></div>
+    ${contested}
+    ${checks.length ? `<h4 class="checks-heading">Recorded result vs derivation</h4>${renderChecks(checks)}` : ''}
+    ${table}
+    ${unrevealed}
+    ${rec ? '' : '<p class="hint">Paste the game\'s fairness record into <strong>Recorded result</strong> to compare the board, the showdown result and the winning seat automatically. Otherwise compare the deal above with the game\'s Results screen.</p>'}
+    ${rec && !rec.meta && wn ? '<p class="hint">Only a winningNumber was pasted, so the winning seat is not checked; paste the full fairness record for that.</p>' : ''}
+    <p class="hint">Betting (amounts, pot, uncalled bets returned, rake) is decided by the players and the settlement, not by the seed, and is not checked here.</p>
+  `);
+}
+
+function renderPokerUnverifiable(reason, rec) {
+  if (reason === 'legacy') {
+    setBanner('warn', '◆ This game can\'t be re-derived · it has no provably-fair commitment.');
+    setDetail(`
+      <p>The record has <code>fairnessVersion: ${escapeHtml(String(rec.meta.fairnessVersion))}</code> or is missing a seed. Without a full commitment the engine shuffles with its fallback (a crypto-RNG Fisher-Yates over the same 52-card deck), which leaves nothing to replay. This is not a mismatch; there is simply nothing to check.</p>
+    `);
+    return;
+  }
+  renderBaccaratUnverifiable(reason, rec);
+}
+
 function renderBoardGrid(board, rows, cols) {
   let s = `<div class="board" style="grid-template-columns: repeat(${cols}, 1fr)">`;
   for (let i = 0; i < rows * cols; i++) {
@@ -899,11 +1540,15 @@ async function handleVerify(e) {
     // with no provably-fair commitment can't be replayed at all — say so
     // before field validation complains about the missing seeds.
     let record = null;
-    if (parsed.gameType === 'baccarat' && parsed.recordText.trim()) {
+    if ((parsed.gameType === 'baccarat' || parsed.gameType === 'poker') && parsed.recordText.trim()) {
       record = parseRecordedResult(parsed.recordText);
+      if (parsed.gameType === 'poker' && record.deal && !Array.isArray(record.deal.community) && record.deal.playerHand !== undefined) {
+        throw new Error('The recorded result is a Baccarat deal, not a Poker hand.');
+      }
       const reason = baccaratRecordUnverifiableReason(record);
       if (reason) {
-        renderBaccaratUnverifiable(reason, record);
+        if (parsed.gameType === 'poker') renderPokerUnverifiable(reason, record);
+        else renderBaccaratUnverifiable(reason, record);
         return;
       }
     }
@@ -931,13 +1576,17 @@ async function handleVerify(e) {
       renderBaccaratResult(parsed, result, record);
       return;
     }
+    if (result.kind === 'poker') {
+      renderPokerResult(parsed, result, record);
+      return;
+    }
     setBanner('ok', '✓ Hash matches the committed value · outcome derived below.');
     setDetail(`
       <div class="kv"><span>Hash check</span><code>SHA256(serverSeed) === storedHash ✓</code></div>
       <div class="kv"><span>Algorithm</span><code>v${FAIRNESS_VERSION}</code></div>
       ${renderDerivation(result)}
       <p class="hint">Compare the derivation above to what FiftyFifty stored for this game. They should match exactly. If they don't, please report with the Game ID.</p>
-      ${parsed.recordText.trim() ? '<p class="hint">The automatic recorded-result comparison covers Baccarat only so far; compare this game by hand.</p>' : ''}
+      ${parsed.recordText.trim() ? '<p class="hint">The automatic recorded-result comparison covers Baccarat and Poker so far; compare this game by hand.</p>' : ''}
     `);
   } catch (err) {
     setBanner('fail', '✗ Could not verify');
@@ -988,6 +1637,7 @@ function applyUrlPrefill() {
   setIf('record', 'record');
   applyRecordToForm();
   setIf('bc_decks', 'decks');
+  setIf('pkr_burns', 'burns');
   setIf('gameId', 'gameId');
   setIf('hash', 'hash');
   setIf('seed', 'seed');
